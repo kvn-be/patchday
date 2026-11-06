@@ -1,0 +1,15 @@
+<!-- @dsCard group="Signature" height=520 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>WeekDial</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Instrument+Sans:wght@400..600&display=swap"></head>
+<body>
+<div style="padding:16px;max-width:440px;margin:auto">
+  <svg class="pd-dial" id="dial" viewBox="0 0 600 600" role="img" aria-label="Week dial showing the chosen update time"></svg>
+  <label for="hour" style="display:grid;gap:4px;margin-top:8px;color:var(--haze);font-size:14px;text-align:center">Pick a time: drag the hand or use the slider
+    <input id="hour" type="range" min="0" max="167" value="147" style="accent-color:var(--brass)"></label>
+</div>
+<script>
+  window.Patchday.mountWeekDial(document.getElementById('dial'), document.getElementById('hour'), { hour: 147 });
+</script>
+</body>
+</html>

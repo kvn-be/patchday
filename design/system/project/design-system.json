@@ -1,0 +1,43 @@
+{
+ "v": 3,
+ "layout": "files",
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-06T19:00:16Z"
+ },
+ "title": "Patchday Design System",
+ "namespace": "Patchday",
+ "libraries": [],
+ "sections": {},
+ "groups": [
+  "Logos"
+ ],
+ "assetGroups": {
+  "Logos": {
+   "name": "Logos",
+   "tile": "l",
+   "order": [
+    "patchday-mark.svg"
+   ],
+   "files": {
+    "patchday-mark.svg": {
+     "name": "patchday-mark.svg",
+     "blob": "306bc9e6cae4cab0405393550f1889d1",
+     "size": 428,
+     "type": "image/svg+xml"
+    }
+   }
+  }
+ },
+ "blobs": {},
+ "docs": {
+  "readme": "project/README.md",
+  "sections": []
+ },
+ "lastChange": {
+  "by": "Patchday",
+  "at": "2026-11-06T19:01:32Z",
+  "via": "local",
+  "note": "Added the script bundle so previews run live."
+ }
+}

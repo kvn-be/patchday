@@ -1,0 +1,542 @@
+<title>Patchday</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Instrument+Sans:wght@400..600&display=swap">
+<style>
+/* Layout concept: a watchmaker's week dial is the product. Everything else stays quiet around it. */
+:root {
+  color-scheme: dark;
+  /* Color: the blue hour, Sunday 03:00. Brass is the only ornament. */
+  --night: #12142b;
+  --night-raised: #1a1d3b;
+  --night-sunk: #0e1024;
+  --line: #2f3358;
+  --control-line: #6a6f9c;
+  --moon: #ece8dc;
+  --haze: #a9abc6;
+  --brass: #dcbb7b;
+  --on-brass: #1c1608;
+  --glow: rgba(120, 128, 214, .2);
+  --ok: #86d3b6;
+  --ok-bg: rgba(134, 211, 182, .12);
+  --wait: #b9bff2;
+  --wait-bg: rgba(185, 191, 242, .13);
+  --back: #f0ad74;
+  --back-bg: rgba(240, 173, 116, .13);
+  /* Type */
+  --display: "Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
+  --text: "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+  --code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Scale: every size follows the window, so the same system fits app and page. */
+  --step-0: clamp(1rem, .96rem + .2vw, 1.125rem);
+  --step-1: clamp(1.2rem, 1.1rem + .5vw, 1.5rem);
+  --step-2: clamp(1.9rem, 1.5rem + 2vw, 3.25rem);
+  --step-3: clamp(4.4rem, 2rem + 8.4vw, 9rem);
+  --space: clamp(4rem, 3rem + 5vw, 8rem);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --night: #eef0f7;
+  --night-raised: #ffffff;
+  --night-sunk: #e2e5f0;
+  --line: #c9cde0;
+  --control-line: #7b80a3;
+  --moon: #171a33;
+  --haze: #51557a;
+  --brass: #80601f;
+  --on-brass: #ffffff;
+  --glow: rgba(128, 96, 31, .1);
+  --ok: #17694f;
+  --ok-bg: rgba(23, 105, 79, .1);
+  --wait: #3f479c;
+  --wait-bg: rgba(63, 71, 156, .1);
+  --back: #9a4f12;
+  --back-bg: rgba(154, 79, 18, .1);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--night);
+  color: var(--moon);
+  font: 400 var(--step-0)/1.55 var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; z-index: 10;
+  height: env(safe-area-inset-top, 0px); background: var(--night);
+}
+h1, h2, h3, p, ol, ul { margin: 0; padding: 0; }
+ol, ul { list-style: none; }
+h2 { font: 400 var(--step-2)/1.08 var(--display); text-wrap: balance; }
+h3 { font: 600 var(--step-0)/1.3 var(--text); }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+code { font: .92em var(--code); }
+
+.wrap {
+  max-width: 1240px; margin-inline: auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (min-width: 720px) {
+  .wrap { padding-left: max(40px, env(safe-area-inset-left, 0px)); padding-right: max(40px, env(safe-area-inset-right, 0px)); }
+}
+.section { padding-block: var(--space) 0; }
+.lede { color: var(--haze); max-width: 34em; }
+
+/* Header */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9;
+  background: color-mix(in srgb, var(--night) 86%, transparent);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.top .wrap { display: flex; align-items: center; gap: 12px; padding-block: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; min-width: 0; }
+.brand svg { width: 34px; height: 34px; flex: none; }
+.brand b { font: 500 1.35rem/1 var(--display); }
+.top .tools { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+/* Buttons and badges */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 0 20px; border-radius: 999px;
+  border: 1px solid transparent; background: none; color: inherit;
+  font: 600 .95rem/1 var(--text); text-decoration: none; cursor: pointer; white-space: nowrap;
+  transition: background-color .15s, border-color .15s, transform .15s;
+}
+.btn:active { transform: translateY(1px); }
+.btn svg { width: 19px; height: 19px; flex: none; }
+.btn-main { background: var(--moon); color: var(--night); }
+.btn-main:hover { background: var(--brass); color: var(--on-brass); }
+.btn-line { border-color: var(--control-line); }
+.btn-line:hover { border-color: var(--haze); }
+.btn-coffee { background: var(--brass); color: var(--on-brass); }
+.btn-coffee:hover { background: var(--moon); color: var(--night); }
+.btn-icon { width: 44px; padding: 0; border-color: var(--control-line); }
+.btn-icon:hover { border-color: var(--haze); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font: 600 .8rem/1.4 var(--text); white-space: nowrap;
+}
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge-ok { color: var(--ok); background: var(--ok-bg); }
+.badge-wait { color: var(--wait); background: var(--wait-bg); }
+.badge-back { color: var(--back); background: var(--back-bg); }
+.badge-plain { color: var(--brass); border: 1px solid var(--line); }
+.badge-plain::before { display: none; }
+
+/* Language switch */
+.lang { display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--control-line); border-radius: 999px; }
+.lang button { min-width: 36px; min-height: 36px; border: 0; border-radius: 999px; background: none; color: var(--haze); font: 600 .82rem/1 var(--text); cursor: pointer; }
+.lang button:hover { color: var(--moon); }
+.lang button[aria-pressed="true"] { background: var(--night-raised); color: var(--brass); }
+
+/* Hero */
+.hero { display: grid; gap: clamp(24px, 4vw, 56px); align-items: center; padding-block: clamp(32px, 5vw, 72px) 0; }
+.hero > * { min-width: 0; }
+.hero-copy { display: grid; gap: 22px; justify-items: start; }
+.hero h1 { font: 400 var(--step-3)/.92 var(--display); letter-spacing: -.02em; margin-left: -.03em; }
+.claim { font-size: var(--step-1); line-height: 1.35; max-width: 24em; }
+.claim strong { font-weight: 600; white-space: nowrap; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.when-note { color: var(--haze); font-size: .95rem; min-height: 3em; max-width: 30em; }
+@media (min-width: 960px) { .hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr); } }
+
+.dial-box { display: grid; gap: 14px; justify-items: center; }
+.dial { width: 100%; max-width: 620px; aspect-ratio: 1; touch-action: none; cursor: grab; user-select: none; display: block; }
+.dial:active { cursor: grabbing; }
+.dial text { font-family: var(--text); fill: var(--haze); }
+.dial .day { font-size: 17px; font-weight: 500; text-anchor: middle; dominant-baseline: central; transition: fill .15s; }
+.dial .day.on { fill: var(--brass); font-weight: 600; }
+.dial .big { font-family: var(--display); font-size: 92px; fill: var(--moon); text-anchor: middle; font-variant-numeric: lining-nums; }
+.dial .sub { font-size: 21px; text-anchor: middle; }
+.dial .tick { stroke: var(--line); stroke-width: 1.4; }
+.dial .tick.day-start { stroke: var(--haze); stroke-width: 2; }
+.dial .tick.past { stroke: var(--brass); }
+.dial .night { fill: none; stroke: var(--wait); stroke-opacity: .4; stroke-width: 5; }
+.dial .ring { fill: var(--night-raised); stroke: var(--line); }
+.dial .inner { fill: var(--night-sunk); stroke: var(--line); }
+.dial .hand { stroke: var(--brass); stroke-width: 3; stroke-linecap: round; }
+.dial .pin { fill: var(--brass); }
+.dial-glow { fill: var(--glow); }
+.slider { width: min(100%, 420px); display: grid; gap: 4px; color: var(--haze); font-size: .9rem; text-align: center; }
+.slider input { width: 100%; accent-color: var(--brass); }
+
+/* A run */
+.run { display: grid; gap: clamp(32px, 5vw, 64px); align-items: start; }
+.run > * { min-width: 0; }
+.steps { display: grid; gap: 18px; margin-top: 28px; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 2.1em minmax(0, 1fr); gap: 2px 8px; counter-increment: s; }
+.steps li::before { content: counter(s); grid-row: span 2; font: 400 1.7rem/1.05 var(--display); color: var(--brass); }
+.steps p { color: var(--haze); }
+@media (min-width: 960px) { .run { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); } }
+
+.window { background: var(--night-raised); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 30px 70px -30px rgba(4, 5, 20, .7); overflow: hidden; }
+.window-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 14px 20px; background: var(--night-sunk); border-bottom: 1px solid var(--line); }
+.window-bar b { font: 500 1.1rem/1.2 var(--display); }
+.window-bar .badge { margin-left: auto; }
+.tally { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 20px; gap: 12px; }
+.tally div { min-width: 0; }
+.tally b { display: block; font: 400 var(--step-2)/1 var(--display); font-variant-numeric: lining-nums; }
+.tally span { color: var(--haze); font-size: .9rem; }
+.row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 130px; gap: 4px 12px; align-items: center; padding: 11px 20px; border-top: 1px solid var(--line); font-size: .95rem; }
+.row .ver { color: var(--haze); font-variant-numeric: tabular-nums; }
+.row .badge { justify-self: start; }
+@media (max-width: 560px) {
+  .row { grid-template-columns: minmax(0, 1fr) auto; }
+  .row .ver { grid-column: 1; grid-row: 2; }
+  .row .badge { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+/* Rules */
+.rules { display: grid; gap: 32px; margin-top: 36px; }
+.rules > div { display: grid; gap: 12px; align-content: start; padding-top: 18px; border-top: 1px solid var(--line); min-width: 0; }
+.rules .badge { justify-self: start; }
+.rules li { color: var(--haze); padding-block: 3px; }
+@media (min-width: 800px) { .rules { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Install */
+.install { display: grid; gap: 28px; margin-top: 32px; }
+.install > div { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.cmd { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 16px; border: 1px solid var(--control-line); border-radius: 10px; background: var(--night-sunk); min-width: 0; }
+.cmd code { overflow-x: auto; white-space: nowrap; flex: 1; min-width: 0; }
+.cmd .btn { min-height: 38px; padding: 0 14px; }
+.install p { color: var(--haze); }
+@media (min-width: 800px) { .install { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px; } }
+
+/* Parts */
+.parts { display: grid; gap: 28px; margin-top: 32px; }
+.parts > div { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.parts h3 { color: var(--haze); font-weight: 500; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatches i { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.specimen { font: 400 var(--step-2)/1.05 var(--display); }
+@media (min-width: 800px) { .parts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Coffee */
+.coffee { margin-top: var(--space); background: var(--night-sunk); border-top: 1px solid var(--line); }
+.coffee .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px 40px; padding-block: clamp(40px, 6vw, 72px); }
+.coffee .wrap > div { display: grid; gap: 8px; min-width: 0; flex: 1 1 320px; }
+.foot { color: var(--haze); font-size: .9rem; padding-block: 20px 28px; }
+
+@media (max-width: 520px) {
+  .top .coffee-text, .top .badge-plain { display: none; }
+  .top .btn-coffee { width: 44px; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .btn, .dial .day { transition: none; }
+}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#start" data-i18n-aria="toTop" aria-label="Patchday, back to top">
+      <svg viewBox="0 0 34 34" aria-hidden="true">
+        <circle cx="17" cy="17" r="15.5" fill="none" stroke="var(--brass)" stroke-width="1.6"/>
+        <circle cx="17" cy="17" r="11" fill="var(--night-sunk)"/>
+        <path d="M17 17 9.6 10.6" stroke="var(--brass)" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="17" cy="17" r="2.2" fill="var(--brass)"/>
+      </svg>
+      <b>Patchday</b>
+    </a>
+    <span class="badge badge-plain" data-i18n="preview">Preview 0.1</span>
+    <div class="tools">
+      <div class="lang" role="group" aria-label="Language / Sprache">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="de" aria-pressed="false">DE</button>
+      </div>
+      <button class="btn btn-icon" id="theme" type="button" aria-label="Switch to light theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" stroke-linejoin="round"/></svg>
+      </button>
+      <a class="btn btn-coffee" href="https://ko-fi.com/kvnbe" target="_blank" rel="noopener" data-i18n-aria="coffeeAria" aria-label="Buy me a coffee on Ko-fi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3.5v2M12.5 3.5v2"/></svg>
+        <span class="coffee-text" data-i18n="coffee">Buy me a coffee</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="start">
+  <div class="wrap">
+    <section class="hero">
+      <div class="hero-copy">
+        <h1>Patchday</h1>
+        <p class="claim"><span data-i18n="claimA">Your updates run every</span> <strong id="when">Sunday at 03:00</strong><span data-i18n="claimB">, with a backup first, a health check after, and a rollback if anything fails.</span></p>
+        <div class="actions">
+          <a class="btn btn-main" href="#laden" data-i18n="getMac">Get for macOS</a>
+          <a class="btn btn-line" href="#laden" data-i18n="getWin">Get for Windows</a>
+        </div>
+        <p class="when-note" id="note" aria-live="polite"></p>
+      </div>
+      <div class="dial-box">
+        <svg class="dial" id="dial" viewBox="0 0 600 600" role="img" data-i18n-aria="dialAria" aria-label="Week dial showing the chosen update time"></svg>
+        <label class="slider" for="hour"><span data-i18n="pick">Pick a time: drag the hand or use the slider</span>
+          <input id="hour" type="range" min="0" max="167" step="1" value="147">
+        </label>
+      </div>
+    </section>
+
+    <section class="section run">
+      <div>
+        <h2 data-i18n="runTitle">One run, from start to report</h2>
+        <ol class="steps">
+          <li><h3 data-i18n="s1">Check</h3><p data-i18n="s1t">Homebrew, winget and Docker containers are listed.</p></li>
+          <li><h3 data-i18n="s2">Back up</h3><p data-i18n="s2t">Stack files and databases are saved first.</p></li>
+          <li><h3 data-i18n="s3">Update</h3><p data-i18n="s3t">One stack at a time, with Docker itself last.</p></li>
+          <li><h3 data-i18n="s4">Test</h3><p data-i18n="s4t">Up to 5 minutes for everything to run healthy again. If not, it rolls back.</p></li>
+          <li><h3 data-i18n="s5">Report</h3><p data-i18n="s5t">You see what ran and what needs your decision.</p></li>
+        </ol>
+      </div>
+      <div class="window" role="group" data-i18n-aria="reportAria" aria-label="Sample report">
+        <div class="window-bar"><b data-i18n="reportDate">Sunday, November 8, 03:00</b><span class="badge badge-plain" data-i18n="sample">Sample data</span></div>
+        <div class="tally">
+          <div><b>4</b><span data-i18n="applied">applied</span></div>
+          <div><b>1</b><span data-i18n="waiting">waiting for you</span></div>
+          <div><b>1</b><span data-i18n="rolled">rolled back</span></div>
+        </div>
+        <div class="row"><span>paperless-ngx</span><span class="ver">3.4.0 → 3.4.1</span><span class="badge badge-ok" data-i18n="bApplied">Applied</span></div>
+        <div class="row"><span>uptime-kuma</span><span class="ver">2.5.8 → 2.5.9</span><span class="badge badge-ok" data-i18n="bApplied">Applied</span></div>
+        <div class="row"><span>vaultwarden</span><span class="ver">1.36.2 → 1.37.4</span><span class="badge badge-ok" data-i18n="bApplied">Applied</span></div>
+        <div class="row"><span>git</span><span class="ver">2.51.0 → 2.52.0</span><span class="badge badge-ok" data-i18n="bApplied">Applied</span></div>
+        <div class="row"><span>stirling-pdf</span><span class="ver">3.1.4 → 3.2.2</span><span class="badge badge-back" data-i18n="bBack">Rolled back</span></div>
+        <div class="row"><span>postgres</span><span class="ver">16.15 → 18.6</span><span class="badge badge-wait" data-i18n="bWait">Waiting for you</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 data-i18n="rulesTitle">Fixed rules, no surprises</h2>
+      <div class="rules">
+        <div>
+          <span class="badge badge-ok" data-i18n="rAuto">Runs automatically</span>
+          <ul><li data-i18n="rAuto1">Patch updates for healthy containers</li><li data-i18n="rAuto2">Minor updates without breaking changes</li><li data-i18n="rAuto3">Homebrew and winget</li></ul>
+        </div>
+        <div>
+          <span class="badge badge-wait" data-i18n="rProp">Suggestion only</span>
+          <ul><li data-i18n="rProp1">Major updates</li><li data-i18n="rProp2">Databases and caches</li><li data-i18n="rProp3">Network, DNS and beta images</li></ul>
+        </div>
+        <div>
+          <span class="badge badge-back" data-i18n="rNever">Never</span>
+          <ul><li data-i18n="rNever1">Delete volumes or databases</li><li><code>docker system prune</code></li><li data-i18n="rNever3">Change stacks behind Portainer's back</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="laden">
+      <h2 data-i18n="getTitle">Install, pick a time, done</h2>
+      <div class="install">
+        <div>
+          <h3 data-i18n="brewTitle">macOS with Homebrew</h3>
+          <div class="cmd"><code id="brew">brew install --cask kvn-be/tap/patchday</code><button class="btn btn-line" type="button" data-copy="brew" data-i18n="copy">Copy</button></div>
+          <p data-i18n="brewNote">Not available yet. This command shows the planned install.</p>
+        </div>
+        <div>
+          <h3>Windows</h3>
+          <div class="cmd"><code>patchday-setup.exe</code></div>
+          <p data-i18n="winNote">Not available yet. The first version will be unsigned, so Windows will show a warning.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 data-i18n="parts">Building blocks</h2>
+      <div class="parts">
+        <div><h3 data-i18n="colors">Colors</h3><div class="swatches">
+          <i style="background:var(--night)"></i><i style="background:var(--night-raised)"></i><i style="background:var(--moon)"></i><i style="background:var(--brass)"></i>
+        </div></div>
+        <div><h3 data-i18n="type">Type</h3><p class="specimen">Bodoni Moda</p><p data-i18n="typeNote">Instrument Sans for all text</p></div>
+        <div><h3>Status</h3><div class="chips"><span class="badge badge-ok" data-i18n="bApplied">Applied</span><span class="badge badge-wait" data-i18n="bWait">Waiting for you</span><span class="badge badge-back" data-i18n="bBack">Rolled back</span></div></div>
+        <div><h3 data-i18n="actions">Actions</h3><div class="chips"><span class="btn btn-main" data-i18n="checkNow">Check now</span><span class="btn btn-line" data-i18n="later">Later</span></div></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="coffee">
+    <div class="wrap">
+      <div>
+        <h2 data-i18n="free">Patchday stays free</h2>
+        <p class="lede" data-i18n="freeNote">Open source under the MIT license. If it saves you work, a coffee is always welcome.</p>
+      </div>
+      <a class="btn btn-coffee" href="https://ko-fi.com/kvnbe" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3.5v2M12.5 3.5v2"/></svg>
+        <span data-i18n="coffee">Buy me a coffee</span>
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <p data-i18n="foot">Account optional. Passwords and tokens always stay on your computer.</p>
+</footer>
+
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const T = {"en": {"preview": "Preview 0.1", "getMac": "Get for macOS", "getWin": "Get for Windows", "runTitle": "One run, from start to report", "s1": "Check", "s1t": "Homebrew, winget and Docker containers are listed.", "s2": "Back up", "s2t": "Stack files and databases are saved first.", "s3": "Update", "s3t": "One stack at a time, with Docker itself last.", "s4": "Test", "s4t": "Up to 5 minutes for everything to run healthy again. If not, it rolls back.", "s5": "Report", "s5t": "You see what ran and what needs your decision.", "sample": "Sample data", "reportDate": "Sunday, November 8, 03:00", "applied": "applied", "waiting": "waiting for you", "rolled": "rolled back", "bApplied": "Applied", "bBack": "Rolled back", "bWait": "Waiting for you", "rulesTitle": "Fixed rules, no surprises", "rAuto": "Runs automatically", "rAuto1": "Patch updates for healthy containers", "rAuto2": "Minor updates without breaking changes", "rAuto3": "Homebrew and winget", "rProp": "Suggestion only", "rProp1": "Major updates", "rProp2": "Databases and caches", "rProp3": "Network, DNS and beta images", "rNever": "Never", "rNever1": "Delete volumes or databases", "rNever3": "Change stacks behind Portainer's back", "getTitle": "Install, pick a time, done", "brewTitle": "macOS with Homebrew", "copy": "Copy", "brewNote": "Not available yet. This command shows the planned install.", "winNote": "Not available yet. The first version will be unsigned, so Windows will show a warning.", "parts": "Building blocks", "colors": "Colors", "type": "Type", "typeNote": "Instrument Sans for all text", "actions": "Actions", "checkNow": "Check now", "later": "Later", "free": "Patchday stays free", "freeNote": "Open source under the MIT license. If it saves you work, a coffee is always welcome.", "foot": "Account optional. Passwords and tokens always stay on your computer.", "coffee": "Buy me a coffee", "claimA": "Your updates run every", "claimB": ", with a backup first, a health check after, and a rollback if anything fails.", "pick": "Pick a time: drag the hand or use the slider", "toTop": "Patchday, back to top", "coffeeAria": "Buy me a coffee on Ko-fi", "dialAria": "Week dial showing the chosen update time", "reportAria": "Sample report", "toLight": "Switch to light theme", "toDark": "Switch to dark theme", "copied": "Copied", "selected": "Selected", "next": "Next run:", "at": "at", "locale": "en-US", "noteNight": "Good choice: at night, nobody notices apps restarting.", "noteDay": "During the day, updates can restart running apps and Docker. Night is safer.", "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"], "short": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]}, "de": {"preview": "Vorschau 0.1", "getMac": "Für macOS laden", "getWin": "Für Windows laden", "runTitle": "Ein Lauf, von Anfang bis Bericht", "s1": "Prüfen", "s1t": "Homebrew, winget und Docker-Container werden erfasst.", "s2": "Sichern", "s2t": "Stack-Dateien und Datenbanken werden vorher gesichert.", "s3": "Aktualisieren", "s3t": "Ein Stack nach dem anderen, Docker selbst zuletzt.", "s4": "Testen", "s4t": "Bis zu 5 Minuten warten, bis alles wieder gesund läuft. Sonst folgt der Rollback.", "s5": "Berichten", "s5t": "Du siehst, was lief und was deine Entscheidung braucht.", "sample": "Beispieldaten", "reportDate": "Sonntag, 8. November, 03:00", "applied": "eingespielt", "waiting": "wartet auf dich", "rolled": "zurückgerollt", "bApplied": "Eingespielt", "bBack": "Zurückgerollt", "bWait": "Wartet auf dich", "rulesTitle": "Feste Regeln statt Überraschungen", "rAuto": "Läuft automatisch", "rAuto1": "Patch-Updates gesunder Container", "rAuto2": "Minor-Updates ohne Breaking Changes", "rAuto3": "Homebrew und winget", "rProp": "Nur als Vorschlag", "rProp1": "Major-Updates", "rProp2": "Datenbanken und Caches", "rProp3": "Netzwerk, DNS und Beta-Images", "rNever": "Niemals", "rNever1": "Volumes oder Datenbanken löschen", "rNever3": "Stacks an Portainer vorbei ändern", "getTitle": "Laden, Uhrzeit wählen, fertig", "brewTitle": "macOS mit Homebrew", "copy": "Kopieren", "brewNote": "Noch nicht verfügbar. Dieser Befehl zeigt den geplanten Weg.", "winNote": "Noch nicht verfügbar. Die erste Version wird unsigniert sein, Windows zeigt dann einen Hinweis.", "parts": "Bausteine", "colors": "Farben", "type": "Schrift", "typeNote": "Instrument Sans für alle Texte", "actions": "Aktionen", "checkNow": "Jetzt prüfen", "later": "Später", "free": "Patchday bleibt kostenlos", "freeNote": "Open Source unter MIT-Lizenz. Wenn es dir Arbeit spart, freue ich mich über einen Kaffee.", "foot": "Konto optional. Passwörter und Tokens bleiben immer auf deinem Rechner.", "coffee": "Kaffee ausgeben", "claimA": "Deine Updates laufen jeden", "claimB": ". Mit Sicherung davor, Prüfung danach und Rollback bei Fehlern.", "pick": "Zeitpunkt wählen: Zeiger ziehen oder Regler nutzen", "toTop": "Patchday, zum Seitenanfang", "coffeeAria": "Kaffee ausgeben auf Ko-fi", "dialAria": "Wochenuhr mit dem gewählten Update-Zeitpunkt", "reportAria": "Beispielbericht", "toLight": "Helles Design einschalten", "toDark": "Dunkles Design einschalten", "copied": "Kopiert", "selected": "Markiert", "next": "Nächster Lauf:", "at": "um", "locale": "de-DE", "noteNight": "Gute Wahl: nachts stört ein Neustart von Apps niemanden.", "noteDay": "Tagsüber können Updates laufende Apps und Docker neu starten. Nachts ist sicherer.", "days": ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"], "short": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]}};
+  let lang = 'en';
+  try { if (localStorage.getItem('patchday-lang') === 'de') lang = 'de'; } catch {}
+  const t = (key) => T[lang][key];
+  const C = 300;
+  const dial = document.getElementById('dial');
+  const slider = document.getElementById('hour');
+  const when = document.getElementById('when');
+  const note = document.getElementById('note');
+
+  const add = (tag, attrs, parent = dial) => {
+    const el = document.createElementNS(NS, tag);
+    for (const key in attrs) el.setAttribute(key, attrs[key]);
+    parent.appendChild(el);
+    return el;
+  };
+  const polar = (hour, radius) => {
+    const a = (hour / 168) * 2 * Math.PI - Math.PI / 2;
+    return [C + radius * Math.cos(a), C + radius * Math.sin(a)];
+  };
+
+  add('circle', { cx: C, cy: C, r: 298, class: 'dial-glow' });
+  add('circle', { cx: C, cy: C, r: 282, class: 'ring' });
+  add('circle', { cx: C, cy: C, r: 196, class: 'inner' });
+
+  // One tick per hour of the week: 168 in total.
+  const ticks = [];
+  for (let h = 0; h < 168; h++) {
+    const start = h % 24 === 0;
+    const [x1, y1] = polar(h, start ? 250 : 262);
+    const [x2, y2] = polar(h, 274);
+    ticks.push(add('line', { x1, y1, x2, y2, class: start ? 'tick day-start' : 'tick' }));
+  }
+  // Quiet hours, 00:00 to 06:00, on every day.
+  for (let d = 0; d < 7; d++) {
+    const [x1, y1] = polar(d * 24, 204);
+    const [x2, y2] = polar(d * 24 + 6, 204);
+    add('path', { d: `M${x1} ${y1}A204 204 0 0 1 ${x2} ${y2}`, class: 'night' });
+  }
+  const dayLabels = t('short').map((label, d) => {
+    const [x, y] = polar(d * 24 + 12, 232);
+    const text = add('text', { x, y, class: 'day' });
+    text.textContent = label;
+    return text;
+  });
+
+  const dayText = add('text', { x: C, y: 232, class: 'sub' });
+  const timeText = add('text', { x: C, y: 330, class: 'big' });
+  const nextText = add('text', { x: C, y: 378, class: 'sub' });
+  const hand = add('line', { x1: C, y1: C, x2: C, y2: C, class: 'hand' });
+  add('circle', { cx: C, cy: C, r: 0, class: 'pin' });
+  const dot = add('circle', { r: 7, class: 'pin' });
+
+  const nextRun = (hour) => {
+    const now = new Date();
+    const monday = new Date(now);
+    monday.setHours(0, 0, 0, 0);
+    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    const run = new Date(monday.getTime());
+    run.setDate(monday.getDate() + Math.floor(hour / 24));
+    run.setHours(hour % 24);
+    if (run <= now) run.setDate(run.getDate() + 7);
+    return run.toLocaleDateString(t('locale'), { day: 'numeric', month: 'long' });
+  };
+
+  let current = 147;
+  const paint = (value) => {
+    current = value;
+    const hour = ((value % 168) + 168) % 168;
+    const whole = Math.round(hour) % 168;
+    const [x2, y2] = polar(hour, 262);
+    const [cx, cy] = polar(hour, 268);
+    // The hand starts at the inner ring so it never crosses the time in the centre.
+    const [x1, y1] = polar(hour, 196);
+    hand.setAttribute('x1', x1); hand.setAttribute('y1', y1);
+    hand.setAttribute('x2', x2); hand.setAttribute('y2', y2);
+    dot.setAttribute('cx', cx); dot.setAttribute('cy', cy);
+
+    const day = Math.floor(whole / 24);
+    const time = `${String(whole % 24).padStart(2, '0')}:00`;
+    dayText.textContent = t('days')[day];
+    timeText.textContent = time;
+    nextText.textContent = `${t('next')} ${nextRun(whole)}`;
+    when.textContent = `${t('days')[day]} ${t('at')} ${time}`;
+    note.textContent = t(whole % 24 < 6 ? 'noteNight' : 'noteDay');
+    dayLabels.forEach((label, d) => label.classList.toggle('on', d === day));
+    ticks.forEach((tick, h) => tick.classList.toggle('past', h >= day * 24 && h <= whole));
+  };
+
+  slider.addEventListener('input', () => paint(Number(slider.value)));
+
+  const fromPointer = (event) => {
+    const box = dial.getBoundingClientRect();
+    const x = event.clientX - box.left - box.width / 2;
+    const y = event.clientY - box.top - box.height / 2;
+    const turn = (Math.atan2(y, x) + Math.PI / 2 + 2 * Math.PI) % (2 * Math.PI);
+    const hour = Math.round((turn / (2 * Math.PI)) * 168) % 168;
+    slider.value = hour;
+    paint(hour);
+  };
+  let dragging = false;
+  dial.addEventListener('pointerdown', (event) => { dragging = true; dial.setPointerCapture(event.pointerId); fromPointer(event); });
+  dial.addEventListener('pointermove', (event) => { if (dragging) fromPointer(event); });
+  dial.addEventListener('pointerup', () => { dragging = false; });
+  dial.addEventListener('pointercancel', () => { dragging = false; });
+
+  // The one orchestrated moment: the hand sweeps through the week to Sunday night.
+  const target = Number(slider.value);
+  paint(target);
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const started = performance.now();
+    const sweep = (now) => {
+      if (dragging || Number(slider.value) !== target) return;
+      const t = Math.min((now - started) / 1500, 1);
+      paint(target * (1 - Math.pow(1 - t, 3)));
+      if (t < 1) requestAnimationFrame(sweep);
+    };
+    requestAnimationFrame(sweep);
+  }
+
+  const theme = document.getElementById('theme');
+  theme.addEventListener('click', () => {
+    const light = document.documentElement.dataset.theme !== 'light';
+    document.documentElement.dataset.theme = light ? 'light' : 'dark';
+    labelTheme();
+  });
+  const labelTheme = () => {
+    const light = document.documentElement.dataset.theme === 'light';
+    theme.setAttribute('aria-label', t(light ? 'toDark' : 'toLight'));
+  };
+
+  const applyLang = (next) => {
+    lang = next;
+    document.documentElement.lang = lang;
+    document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', t(el.dataset.i18nAria)); });
+    document.querySelectorAll('[data-lang]').forEach((el) => { el.setAttribute('aria-pressed', String(el.dataset.lang === lang)); });
+    t('short').forEach((label, d) => { dayLabels[d].textContent = label; });
+    labelTheme();
+    paint(current);
+  };
+  document.querySelectorAll('[data-lang]').forEach((button) => {
+    button.addEventListener('click', () => {
+      applyLang(button.dataset.lang);
+      try { localStorage.setItem('patchday-lang', lang); } catch {}
+    });
+  });
+  applyLang(lang);
+
+  document.querySelectorAll('[data-copy]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const source = document.getElementById(button.dataset.copy);
+      try {
+        await navigator.clipboard.writeText(source.textContent);
+        button.textContent = t('copied');
+      } catch {
+        getSelection().selectAllChildren(source);
+        button.textContent = t('selected');
+      }
+      setTimeout(() => { button.textContent = t('copy'); }, 1600);
+    });
+  });
+})();
+</script>

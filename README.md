@@ -1,0 +1,241 @@
+<p align="center">
+  <img src="docs/images/icon.png" alt="Patchday logo" width="128">
+</p>
+
+<h1 align="center">Patchday</h1>
+
+<p align="center">
+  Scheduled, rule-based updates for Homebrew, winget and Docker, with a backup first, a health check after, and a rollback if anything fails.
+</p>
+
+<p align="center">
+  <img alt="Platforms: macOS and Windows" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-1a1d3b">
+  <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-dcbb7b">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-1a1d3b">
+  <a href="https://ko-fi.com/kvnbe"><img alt="Buy me a coffee on Ko-fi" src="https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-dcbb7b"></a>
+</p>
+
+<p align="center">
+  <img src="docs/images/overview.png" alt="Patchday showing the week dial and an update report" width="860">
+</p>
+
+<p align="center"><sub>Screenshots use sample data.</sub></p>
+
+> [!WARNING]
+> Patchday is an early preview. Real update runs have not been tested widely yet. Use **Check now** first, and turn on automatic installs only after you have read the [rules](#the-rules).
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Install](#install)
+- [Get started](#get-started)
+- [How a run works](#how-a-run-works)
+- [The rules](#the-rules)
+- [Docker and Portainer](#docker-and-portainer)
+- [Settings](#settings)
+- [Your data](#your-data)
+- [Troubleshooting](#troubleshooting)
+- [Build from source](#build-from-source)
+- [Project structure](#project-structure)
+- [Known limits](#known-limits)
+- [Support](#support)
+- [License](#license)
+
+## What it does
+
+- **Pick your own time.** Drag the hand on a dial with all 168 hours of the week.
+- **See changes before they happen.** **Check now** lists every update and changes nothing.
+- **Update packages.** Homebrew on macOS, winget on Windows.
+- **Update Docker containers.** Patchday finds Compose stacks by itself and works with Portainer if you use it.
+- **Stay in control.** Risky updates become suggestions that wait for your decision.
+- **Recover from bad updates.** A stack that does not come back healthy returns to its old version.
+- **English and German.** Dark by default, with a light theme.
+
+<p align="center">
+  <img src="docs/images/week-dial.png" alt="Week dial set to Sunday at 03:00" width="420">
+  <img src="docs/images/light-german.png" alt="Patchday in the light theme and in German" width="420">
+</p>
+
+## Install
+
+Download the latest version from the [Releases page](https://github.com/kvn-be/patchday/releases), or [build Patchday yourself](#build-from-source).
+
+### Windows
+
+1. Download and run `Patchday-Setup-0.1.0.exe`.
+2. If Windows shows "Windows protected your PC", select **More info**, then **Run anyway**. The warning appears because the app is not signed yet.
+3. Follow the installer and start Patchday.
+
+### macOS
+
+1. Download and open `Patchday-0.1.0-arm64.dmg` for Apple silicon, or `Patchday-0.1.0-x64.dmg` for Intel Macs.
+2. Drag Patchday to **Applications**.
+3. Start it. macOS blocks unsigned apps, so go to **System Settings > Privacy & Security** and select **Open Anyway**.
+
+### Homebrew
+
+A Homebrew tap is planned but not available yet.
+
+## Get started
+
+1. Select **Check now**. Patchday lists what would change, and nothing is installed.
+2. Read the list. **Planned** would run automatically, **Waiting for you** would not.
+3. Pick a time on the dial. The arcs mark the quiet hours from 00:00 to 06:00.
+4. Turn on **Run on this schedule**. Scheduled runs now report what would change.
+5. When you trust the results, open **Settings** and turn on **Install updates on schedule**.
+
+To update right away, select **Update now** and confirm. Containers and apps may restart.
+
+<p align="center">
+  <img src="docs/images/report.png" alt="Report with applied, waiting and rolled back updates" width="640">
+</p>
+
+| Status | Meaning |
+| --- | --- |
+| Planned | Would be installed by a real run. Only shown in previews. |
+| Applied | Installed and confirmed. |
+| Waiting for you | Not installed. The line below it says why. |
+| Rolled back | Installed, failed the health check, and returned to the old version. |
+| Failed | Could not be completed. The line below it names the next step. |
+
+## How a run works
+
+```mermaid
+flowchart LR
+  A[Check] --> B[Back up]
+  B --> C[Update]
+  C --> D{Healthy within 5 minutes?}
+  D -- Yes --> E[Report]
+  D -- No --> F[Roll back]
+  F --> E
+```
+
+1. **Check.** Lists running containers, looks up newer image tags, and lists outdated packages.
+2. **Back up.** Saves the stack file and dumps PostgreSQL databases in that stack. If a backup fails, that stack is not updated.
+3. **Update.** One stack at a time. Docker runtimes such as OrbStack are updated last.
+4. **Test.** Waits up to 5 minutes until every updated container runs the new image and stays healthy.
+5. **Report.** Saves the result and shows a notification after scheduled runs.
+
+## The rules
+
+Patchday uses fixed rules and no AI. A container only updates automatically if every condition is met.
+
+| Runs automatically | Suggestion only | Never |
+| --- | --- | --- |
+| Patch updates of healthy containers | Major updates | Delete volumes or databases |
+| Homebrew and winget packages | Databases and caches | `docker system prune` |
+| Minor updates with release notes that show no breaking changes (see [Known limits](#known-limits)) | Network and DNS services such as `cloudflared` | Change a stack behind Portainer's back |
+| | Portainer itself, locally built images, prerelease tags | |
+| | Unhealthy containers and images without a build for your CPU | |
+| | Anything on your **Never update** list | |
+
+Image tags keep their scheme: `1.2.3-alpine` only moves to another `-alpine` tag.
+
+## Docker and Portainer
+
+**Compose.** Patchday reads the Compose labels of running containers, edits the `image:` line in the stack file and runs `docker compose up -d`. Comments and layout in the file stay as they are.
+
+**Portainer.** Stacks owned by Portainer are only changed through its API.
+
+1. In Portainer, open **My account** and create an access token.
+2. In Patchday, open **Settings** and enter the address, for example `https://127.0.0.1:9443`.
+3. Paste the token and select **Save token**.
+
+While Portainer is running and no token is saved, stacks that might belong to it only get suggestions. Self-signed certificates are accepted for local addresses only. Stacks deployed from Git are never changed.
+
+## Settings
+
+<p align="center">
+  <img src="docs/images/settings.png" alt="Patchday settings" width="520">
+</p>
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| Run on this schedule | Off | Registers the run with launchd on macOS or Task Scheduler on Windows. |
+| Install updates on schedule | Off | While off, scheduled runs only report. |
+| Install minor updates automatically | On | While off, minor updates of containers are suggestions. |
+| Never update | Empty | Names of images or packages to leave alone, separated by commas. |
+| Portainer address and token | Empty | Connects Portainer stacks. |
+
+Language and theme are in the header.
+
+## Your data
+
+Patchday has no account and no telemetry. Everything stays on your computer:
+
+| Item | macOS | Windows |
+| --- | --- | --- |
+| App data | `~/Library/Application Support/Patchday` | `%APPDATA%\Patchday` |
+
+Inside that folder:
+
+- `settings.json`: your settings.
+- `reports/`: one file per run.
+- `backups/`: stack files and database dumps. These may contain sensitive data, and old backups are not removed automatically.
+- `portainer.token`: your token, encrypted by the operating system.
+
+To find updates, Patchday sends image names to Docker Hub and other public registries.
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| macOS says the app is damaged | Run `xattr -dr com.apple.quarantine /Applications/Patchday.app` |
+| The report says `Docker is not reachable` | Start Docker, then select **Check now** again. |
+| A stack shows `Portainer is not connected` | Add the address and token in **Settings**. |
+| A stack shows `not managed by Compose or Portainer` | Portainer is running and no token is saved, or the container was started without Compose. |
+| A package shows **Failed** | Run the command shown in the report. Some apps need a password or must be closed first. |
+| A stack shows **Failed** after a rollback | Restore the stack from the backup path shown in the report. |
+| A scheduled run did not start | The computer must be awake and you must be logged in. |
+
+## Build from source
+
+You need Node.js 22.18 or newer.
+
+```sh
+git clone https://github.com/kvn-be/patchday.git
+cd patchday
+npm ci
+npm start
+```
+
+| Command | What it does |
+| --- | --- |
+| `npm start` | Builds and starts the app. Development builds never register a schedule. |
+| `npm test` | Runs the tests. |
+| `npm run typecheck` | Checks the TypeScript types. |
+| `npm run scan` | Prints containers and outdated packages in the terminal, read-only. |
+| `npm run dist:mac` | Creates the `.dmg` files in `release/`. |
+| `npm run dist:win` | Creates the `.exe` installer in `release/`. |
+
+Starting the **Build** workflow on GitHub, or pushing a tag like `v0.1.0`, builds both platforms.
+
+## Project structure
+
+```text
+src/
+  core/       Pure rules: versions, policy, schedules, parsers
+  engine/     Update runs, registries, Portainer client
+  main/       Electron main process and system scheduler
+  renderer/   The user interface
+  cli/        Read-only scan command
+design/       Design system and landing page
+scripts/      Build script
+```
+
+## Known limits
+
+- Release notes are not fetched yet, so minor container updates stay suggestions.
+- There is no vulnerability scan or log analysis yet.
+- Old images are not removed after updates.
+- Builds are not signed, so both systems show a warning.
+- The app does not update itself.
+- Scheduled runs on Windows and winget support have had little real-world testing.
+
+## Support
+
+Patchday is free. If it saves you work, you can [buy me a coffee](https://ko-fi.com/kvnbe).
+
+## License
+
+[MIT](LICENSE)

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Patchday</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="pd-header">
+  <div class="pd-brand">
+    <svg viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="15.5" fill="none" stroke="var(--brass)" stroke-width="1.6"/><circle cx="17" cy="17" r="11" fill="var(--night-sunk)"/><path d="M17 17 9.6 10.6" stroke="var(--brass)" stroke-width="2" stroke-linecap="round"/><circle cx="17" cy="17" r="2.2" fill="var(--brass)"/></svg>
+    <b>Patchday</b>
+  </div>
+  <span class="pd-badge pd-badge-plain" id="version"></span>
+  <div class="pd-header-tools">
+    <div class="pd-lang" role="group" aria-label="Language / Sprache">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="de" aria-pressed="false">DE</button>
+    </div>
+    <button class="pd-btn pd-btn-icon" id="theme" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="pd-btn pd-btn-coffee" id="coffee" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3.5v2M12.5 3.5v2"/></svg>
+      <span class="coffee-text" data-i18n="coffee"></span>
+    </button>
+  </div>
+</header>
+
+<main class="app">
+  <section class="schedule" aria-labelledby="schedule-title">
+    <h1 id="schedule-title" data-i18n="scheduleTitle"></h1>
+    <div id="dial-slot"></div>
+    <p class="hint" id="hint" aria-live="polite"></p>
+    <label class="toggle"><input type="checkbox" id="enabled"><span data-i18n="enabled"></span></label>
+    <p class="hint" id="next"></p>
+  </section>
+
+  <section class="work">
+    <div class="actions">
+      <button class="pd-btn pd-btn-main" id="check" type="button" data-i18n="check"></button>
+      <button class="pd-btn pd-btn-line" id="update" type="button" data-i18n="update"></button>
+      <span class="progress" id="progress" role="status"></span>
+    </div>
+    <div class="pd-window" id="report"></div>
+    <details class="settings">
+      <summary data-i18n="settings"></summary>
+      <div class="settings-body">
+        <label class="toggle"><input type="checkbox" id="apply"><span data-i18n="applyLabel"></span></label>
+        <p class="hint" data-i18n="applyHint"></p>
+        <label class="toggle"><input type="checkbox" id="minor"><span data-i18n="minorLabel"></span></label>
+        <label class="field"><span data-i18n="holdsLabel"></span><input id="holds" type="text" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span data-i18n="portainerUrl"></span><input id="portainer-url" type="url" placeholder="https://127.0.0.1:9443" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span data-i18n="portainerToken"></span><input id="portainer-token" type="password" autocomplete="off"></label>
+        <p class="hint" id="token-state"></p>
+        <div><button class="pd-btn pd-btn-line" id="save-token" type="button" data-i18n="saveToken"></button></div>
+      </div>
+    </details>
+  </section>
+</main>
+
+<dialog id="confirm">
+  <h2 data-i18n="confirmTitle"></h2>
+  <p data-i18n="confirmText"></p>
+  <div class="actions">
+    <button class="pd-btn pd-btn-main" id="confirm-yes" type="button" data-i18n="confirmYes"></button>
+    <button class="pd-btn pd-btn-line" id="confirm-no" type="button" data-i18n="cancel"></button>
+  </div>
+</dialog>
+<script src="bundle.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

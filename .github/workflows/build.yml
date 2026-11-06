@@ -1,0 +1,56 @@
+name: Build
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: dist:mac
+            files: release/*.dmg
+          - os: windows-latest
+            target: dist:win
+            files: release/*.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run ${{ matrix.target }} -- --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: patchday-${{ matrix.os }}
+          path: ${{ matrix.files }}
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cat > notes.md <<'NOTES'
+          Early preview. Real update runs have had little testing, so start with **Check now**.
+
+          - Windows: `Patchday-Setup-*.exe`
+          - macOS with Apple silicon: `Patchday-*-arm64.dmg`
+          - macOS with Intel: `Patchday-*-x64.dmg`
+
+          Builds are not signed yet, so Windows and macOS show a warning. The README explains how to open the app.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" assets/* --title "Patchday $GITHUB_REF_NAME" --notes-file notes.md --prerelease

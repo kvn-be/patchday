@@ -1,0 +1,79 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { planBrew } from './brew.ts';
+import { decide, protectedCategory } from './policy.ts';
+import { launchdPlist, nextRun, schtasksArgs, validateSchedule } from './schedule.ts';
+import { classify, latestTag } from './version.ts';
+
+const base = { image: 'ghcr.io/acme/app', currentTag: '1.2.3', candidateTag: '1.2.4', healthy: true, managed: true };
+
+test('classify keeps the tag scheme', () => {
+  assert.equal(classify('1.2.3', '1.2.4'), 'patch');
+  assert.equal(classify('v1.2.3', 'v1.3.0'), 'minor');
+  assert.equal(classify('1.2.3-alpine', '2.0.0-alpine'), 'major');
+  assert.equal(classify('1.2.3-alpine', '1.2.4'), null);
+  assert.equal(classify('latest', '1.2.4'), null);
+  assert.equal(classify('1.2.3', '1.2.3'), 'none');
+  assert.equal(classify('1.10.0', '1.9.0'), 'none');
+});
+
+test('latestTag compares numerically and ignores prereleases', () => {
+  const tags = ['1.9.0', '1.10.0', '1.11.0-rc1', '1.10.0-alpine', 'latest', '2.0'];
+  assert.equal(latestTag('1.8.0', tags), '1.10.0');
+  assert.equal(latestTag('1.10.0', tags), null);
+  assert.equal(latestTag('1.8.0-alpine', tags), '1.10.0-alpine');
+});
+
+test('policy updates safe patches automatically', () => {
+  assert.equal(decide(base).action, 'auto');
+  assert.equal(decide({ ...base, candidateTag: '1.3.0', releaseNotes: 'Fixes' }).action, 'auto');
+});
+
+test('policy never auto-updates risky candidates', () => {
+  const risky = [
+    { ...base, candidateTag: '2.0.0' },
+    { ...base, candidateTag: '1.3.0' },
+    { ...base, healthy: false },
+    { ...base, managed: false },
+    { ...base, releaseNotes: 'BREAKING CHANGE: config moved' },
+    { ...base, image: 'postgres', currentTag: '16.1', candidateTag: '16.2' },
+    { ...base, image: 'docker.io/library/redis' },
+    { ...base, image: 'valkey/valkey' },
+    { ...base, image: 'local/immich-server' },
+    { ...base, image: 'ghcr.io/immich-app/immich-machine-learning' },
+    { ...base, image: 'cloudflare/cloudflared' },
+    { ...base, image: 'portainer/portainer-ce' },
+    { ...base, currentTag: '6.0.0-beta13', candidateTag: '6.0.1-beta13' },
+  ];
+  for (const candidate of risky) assert.equal(decide(candidate).action, 'propose', candidate.image);
+});
+
+test('policy honours holds and does not over-match protected names', () => {
+  assert.equal(decide(base, { autoMinor: true, holds: ['acme'] }).action, 'propose');
+  assert.equal(protectedCategory('ghcr.io/acme/postgres-exporter'), 'database');
+  assert.equal(protectedCategory('ghcr.io/acme/redistribute'), null);
+});
+
+test('schedule validation and next run', () => {
+  assert.deepEqual(validateSchedule({ enabled: true, days: [], hour: 24, minute: 0 }), ['at least one day is required', 'hour must be 0-23']);
+  const schedule = { enabled: true, days: [0], hour: 3, minute: 0 };
+  const saturday = new Date(2026, 10, 7, 12, 0);
+  assert.deepEqual(nextRun(schedule, saturday), new Date(2026, 10, 8, 3, 0));
+  const sundayLate = new Date(2026, 10, 8, 3, 0);
+  assert.deepEqual(nextRun(schedule, sundayLate), new Date(2026, 10, 15, 3, 0));
+  assert.equal(nextRun({ ...schedule, enabled: false }, saturday), null);
+});
+
+test('scheduler output for launchd and schtasks', () => {
+  const schedule = { enabled: true, days: [0, 3], hour: 3, minute: 5 };
+  const plist = launchdPlist(schedule, 'io.patchday.run', ['/Applications/A&B.app', '--run']);
+  assert.match(plist, /A&amp;B/);
+  assert.equal(plist.match(/<key>Weekday<\/key>/g)?.length, 2);
+  assert.deepEqual(schtasksArgs(schedule, 'Patchday', 'patchday.exe --run').slice(-4), ['/D', 'SUN,WED', '/ST', '03:05']);
+});
+
+test('brew plan runs Docker runtimes last and skips itself', () => {
+  const steps = planBrew(['orbstack', 'firefox', 'patchday', 'slack'], { holds: ['slack'] });
+  assert.deepEqual(steps.map((step) => step.args.at(-1)), ['--formula', 'firefox', 'orbstack']);
+  assert.equal(steps.at(-1)?.restartsDocker, true);
+});

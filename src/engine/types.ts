@@ -19,6 +19,22 @@ export interface Report {
   notes: string[];
 }
 
+export type ProgressState = 'queued' | 'running' | 'done' | 'failed';
+export type Phase = 'backup' | 'update' | 'test' | 'rollback' | 'retry';
+
+export interface ProgressItem {
+  id: string;
+  source: ItemSource;
+  name: string;
+  from: string;
+  to: string;
+  state: ProgressState;
+  phase: Phase | null;
+  // null means the tool reports no progress, so the bar only shows activity.
+  percent: number | null;
+  reason: string;
+}
+
 export interface Settings {
   hourOfWeek: number;
   scheduleEnabled: boolean;
@@ -28,6 +44,7 @@ export interface Settings {
   language: 'en' | 'de';
   theme: 'dark' | 'light';
   portainerUrl: string;
+  adminAsked: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +56,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'en',
   theme: 'dark',
   portainerUrl: '',
+  adminAsked: false,
 };
 
 export interface ExecResult {

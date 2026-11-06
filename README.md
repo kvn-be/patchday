@@ -10,7 +10,7 @@
 
 <p align="center">
   <img alt="Platforms: macOS and Windows" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-1a1d3b">
-  <img alt="Version 0.1.0" src="https://img.shields.io/badge/version-0.1.0-dcbb7b">
+  <img alt="Version 0.2.0" src="https://img.shields.io/badge/version-0.2.0-dcbb7b">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-1a1d3b">
   <a href="https://ko-fi.com/kvnbe"><img alt="Buy me a coffee on Ko-fi" src="https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-dcbb7b"></a>
 </p>
@@ -49,6 +49,10 @@
 - **Update Docker containers.** Patchday finds Compose stacks by itself and works with Portainer if you use it.
 - **Stay in control.** Risky updates become suggestions that wait for your decision.
 - **Recover from bad updates.** A stack that does not come back healthy returns to its old version.
+- **Watch it happen.** Every update has its own progress bar, and failures show a short reason.
+- **Fix common failures.** Busy apps, bad downloads and network errors are retried once automatically.
+- **Update itself.** Patchday shows when a new version is out and installs it with one click.
+- **Allow admin rights once.** On Windows, one confirmation replaces a prompt for every app.
 - **English and German.** Dark by default, with a light theme.
 
 <p align="center">
@@ -62,13 +66,14 @@ Download the latest version from the [Releases page](https://github.com/kvn-be/p
 
 ### Windows
 
-1. Download and run `Patchday-Setup-0.1.0.exe`.
+1. Download and run `Patchday-Setup-0.2.0.exe`.
 2. If Windows shows "Windows protected your PC", select **More info**, then **Run anyway**. The warning appears because the app is not signed yet.
 3. Follow the installer and start Patchday.
+4. On first start, select **Allow once** and confirm the Windows prompt. Patchday creates a task that installs updates without asking again. You can do this later in **Settings**.
 
 ### macOS
 
-1. Download and open `Patchday-0.1.0-arm64.dmg` for Apple silicon, or `Patchday-0.1.0-x64.dmg` for Intel Macs.
+1. Download and open `Patchday-0.2.0-arm64.dmg` for Apple silicon, or `Patchday-0.2.0-x64.dmg` for Intel Macs.
 2. Drag Patchday to **Applications**.
 3. Start it. macOS blocks unsigned apps, so go to **System Settings > Privacy & Security** and select **Open Anyway**.
 
@@ -174,7 +179,7 @@ Inside that folder:
 - `backups/`: stack files and database dumps. These may contain sensitive data, and old backups are not removed automatically.
 - `portainer.token`: your token, encrypted by the operating system.
 
-To find updates, Patchday sends image names to Docker Hub and other public registries.
+To find updates, Patchday sends image names to Docker Hub and other public registries, and asks GitHub for its own latest version.
 
 ## Troubleshooting
 
@@ -184,7 +189,8 @@ To find updates, Patchday sends image names to Docker Hub and other public regis
 | The report says `Docker is not reachable` | Start Docker, then select **Check now** again. |
 | A stack shows `Portainer is not connected` | Add the address and token in **Settings**. |
 | A stack shows `not managed by Compose or Portainer` | Portainer is running and no token is saved, or the container was started without Compose. |
-| A package shows **Failed** | Run the command shown in the report. Some apps need a password or must be closed first. |
+| A package shows **Failed** | The line below it names the cause, for example `app is running, close it`. Fix that and run again. |
+| On macOS, a cask shows `needs your admin password` | Patchday does not store your password. Run `brew upgrade --cask <name>` once in the terminal. |
 | A stack shows **Failed** after a rollback | Restore the stack from the backup path shown in the report. |
 | A scheduled run did not start | The computer must be awake and you must be logged in. |
 
@@ -229,8 +235,10 @@ scripts/      Build script
 - There is no vulnerability scan or log analysis yet.
 - Old images are not removed after updates.
 - Builds are not signed, so both systems show a warning.
-- The app does not update itself.
-- Scheduled runs on Windows and winget support have had little real-world testing.
+- Versions before 0.2.0 cannot update themselves, so install 0.2.0 by hand once.
+- Scheduled runs on Windows, the admin task and winget support have had little real-world testing.
+- Homebrew and winget report no percentage, so their bars show activity until a package is finished.
+- Some installers refuse to run as administrator. They show that as the reason.
 
 ## Support
 

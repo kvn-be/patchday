@@ -37,6 +37,13 @@ p { margin: 0; }
 
 .pd-report-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .pd-reason { grid-column: 1 / -1; color: var(--haze); font-size: 13px; }
+.self-update { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); padding: var(--space-2) 16px; background: var(--night-sunk); border-bottom: 1px solid var(--line); }
+.self-update[hidden], .self-update .pd-progress[hidden] { display: none; }
+.self-update p { flex: 1 1 240px; min-width: 0; }
+.self-update .pd-progress { flex: 1 1 100%; }
+.overall { display: grid; gap: 6px; padding: var(--space-3); }
+.admin-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.admin-row[hidden] { display: none; }
 .empty { display: grid; gap: var(--space-1); padding: var(--space-5) var(--space-3); }
 .empty p { color: var(--haze); }
 .notes { padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); color: var(--haze); font-size: 14px; }

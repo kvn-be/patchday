@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Patchday","components":[{"name":"AppHeader"},{"name":"Badge"},{"name":"Button"},{"name":"CommandField"},{"name":"LanguageSwitch"},{"name":"ReportWindow"},{"name":"WeekDial"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Patchday","components":[{"name":"AppHeader"},{"name":"Badge"},{"name":"Button"},{"name":"CommandField"},{"name":"LanguageSwitch"},{"name":"ProgressBar"},{"name":"ReportWindow"},{"name":"WeekDial"}]} */
 (function () {
   // Components are plain CSS classes from bundle.css. Only the dial needs a script.
   function mountWeekDial(dial, slider, options) {

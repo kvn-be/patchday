@@ -1,16 +1,21 @@
 import { app, BrowserWindow, ipcMain, Notification, safeStorage, shell } from 'electron';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createPortainerClient } from '../engine/portainer.ts';
 import { exec } from '../engine/exec.ts';
 import { createTagLookup } from '../engine/registry.ts';
 import { run } from '../engine/run.ts';
-import { DEFAULT_SETTINGS, type Report, type Settings } from '../engine/types.ts';
+import { WORKER_FLAG } from '../core/elevation.ts';
+import { DEFAULT_SETTINGS, type ProgressItem, type Report, type Settings } from '../engine/types.ts';
+import { runWorker, runWorkerSelfUpdate, setupWorker, workerReady, writeStatus } from './elevation.ts';
 import { syncSchedule } from './scheduler.ts';
+import { findUpdate, installMac, installWindows } from './updater.ts';
 
 const COFFEE_URL = 'https://ko-fi.com/kvnbe';
 const SCHEDULED_FLAG = '--run-scheduled';
 const scheduled = process.argv.includes(SCHEDULED_FLAG);
+const worker = process.argv.includes(WORKER_FLAG);
+const headless = scheduled || worker;
 
 const data = (...parts: string[]) => join(app.getPath('userData'), ...parts);
 
@@ -42,7 +47,7 @@ async function listReports(): Promise<Report[]> {
   return Promise.all(newest.map(async (name) => JSON.parse(await readFile(data('reports', name), 'utf8'))));
 }
 
-async function execute(mode: Report['mode'], onLog: (message: string) => void): Promise<Report> {
+async function execute(mode: Report['mode'], onLog: (message: string) => void, onProgress: (items: ProgressItem[]) => void = () => {}): Promise<Report> {
   const settings = await loadSettings();
   const token = await loadToken();
   const report = await run(
@@ -58,6 +63,7 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void): 
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       now: () => new Date(),
       log: onLog,
+      onProgress,
     },
     settings,
     mode,
@@ -92,7 +98,10 @@ function registerIpc(): void {
     if (busy) throw new Error('A run is already in progress');
     busy = true;
     try {
-      return await execute(mode, (message) => sender.send('log', message));
+      const onItems = (items: ProgressItem[]) => sender.send('progress', items);
+      // Windows: real updates go through the task that already holds admin rights.
+      if (mode === 'apply' && (await workerReady(exec))) return await runWorker(exec, data('progress.json'), onItems);
+      return await execute(mode, (message) => sender.send('log', message), onItems);
     } finally {
       busy = false;
     }
@@ -103,7 +112,14 @@ function registerIpc(): void {
     version: app.getVersion(),
     platform: process.platform,
     hasToken: (await loadToken()) !== null,
+    adminReady: await workerReady(exec),
+    packaged: app.isPackaged,
   }));
+  ipcMain.handle('admin', async () => {
+    if (process.platform !== 'win32' || !app.isPackaged) return false;
+    await saveFile(data('settings.json'), JSON.stringify({ ...(await loadSettings()), adminAsked: true }, null, 2));
+    return setupWorker(exec, data('worker-task.xml'), process.execPath);
+  });
   ipcMain.handle('settings', async (_event, patch: Partial<Settings>) => {
     const previous = await loadSettings();
     const settings = { ...previous, ...patch };
@@ -121,20 +137,68 @@ function registerIpc(): void {
     await writeFile(data('portainer.token'), safeStorage.encryptString(token));
   });
   ipcMain.handle('coffee', () => shell.openExternal(COFFEE_URL));
+  ipcMain.handle('self-check', async () => {
+    if (!app.isPackaged) return null;
+    return (await findUpdate().catch(() => null))?.version ?? null;
+  });
+  ipcMain.handle('self-install', async (event) => {
+    const onPercent = (percent: number) => event.sender.send('self-progress', percent);
+    if (process.platform === 'darwin') {
+      const release = await findUpdate();
+      if (release) await installMac(release, onPercent);
+      return;
+    }
+    if (await workerReady(exec)) {
+      await runWorkerSelfUpdate(exec, data('job.json'), data('progress.json'), onPercent);
+      app.quit();
+      return;
+    }
+    await installWindows(onPercent);
+  });
 }
 
 async function runScheduled(): Promise<void> {
   const settings = await loadSettings();
-  const report = await execute(settings.applyUpdates ? 'apply' : 'preview', () => {});
+  const elevated = settings.applyUpdates && (await workerReady(exec));
+  const report = elevated
+    ? await runWorker(exec, data('progress.json'), () => {})
+    : await execute(settings.applyUpdates ? 'apply' : 'preview', () => {});
   const changed = report.items.filter((item) => item.outcome === 'applied').length;
   const open = report.items.filter((item) => item.outcome !== 'applied').length;
   new Notification({ title: 'Patchday', body: `${changed} applied, ${open} need a look` }).show();
   setTimeout(() => app.quit(), 3000);
 }
 
-if (!scheduled && !app.requestSingleInstanceLock()) app.quit();
+async function selfUpdateAsWorker(path: string): Promise<void> {
+  try {
+    await installWindows((percent) => void writeStatus(path, { state: 'running', items: [], selfUpdate: { percent } }));
+    await writeStatus(path, { state: 'done', items: [], selfUpdate: { percent: 100 } });
+  } catch (error) {
+    await writeStatus(path, { state: 'running', items: [], selfUpdate: { percent: 0, error: (error as Error).message } });
+    app.quit();
+  }
+}
+
+async function runAsWorker(): Promise<void> {
+  const path = data('progress.json');
+  const job = await readFile(data('job.json'), 'utf8').catch(() => null);
+  await rm(data('job.json'), { force: true });
+  if (job && JSON.parse(job).action === 'self-update') return selfUpdateAsWorker(path);
+
+  let items: ProgressItem[] = [];
+  await writeStatus(path, { state: 'running', items });
+  const report = await execute('apply', () => {}, (next) => {
+    items = next;
+    void writeStatus(path, { state: 'running', items });
+  });
+  await writeStatus(path, { state: 'done', items, report });
+  app.quit();
+}
+
+if (!headless && !app.requestSingleInstanceLock()) app.quit();
 
 app.whenReady().then(() => {
+  if (worker) return runAsWorker();
   if (scheduled) return runScheduled();
   registerIpc();
   createWindow();
@@ -142,4 +206,4 @@ app.whenReady().then(() => {
   return undefined;
 });
 
-app.on('window-all-closed', () => { if (!scheduled) app.quit(); });
+app.on('window-all-closed', () => { if (!headless) app.quit(); });

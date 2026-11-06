@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { planBrew } from './brew.ts';
+import { upgradeArgs, upgradeOrder } from './brew.ts';
 import { decide, protectedCategory } from './policy.ts';
 import { launchdPlist, nextRun, schtasksArgs, validateSchedule } from './schedule.ts';
 import { classify, latestTag } from './version.ts';
@@ -72,8 +72,8 @@ test('scheduler output for launchd and schtasks', () => {
   assert.deepEqual(schtasksArgs(schedule, 'Patchday', 'patchday.exe --run').slice(-4), ['/D', 'SUN,WED', '/ST', '03:05']);
 });
 
-test('brew plan runs Docker runtimes last and skips itself', () => {
-  const steps = planBrew(['orbstack', 'firefox', 'patchday', 'slack'], { holds: ['slack'] });
-  assert.deepEqual(steps.map((step) => step.args.at(-1)), ['--formula', 'firefox', 'orbstack']);
-  assert.equal(steps.at(-1)?.restartsDocker, true);
+test('brew runs Docker runtimes last, one package at a time', () => {
+  const cask = (name: string) => ({ name, kind: 'cask' as const, installed: '1', available: '2' });
+  assert.deepEqual(upgradeOrder([cask('orbstack'), cask('firefox')]).map((entry) => entry.name), ['firefox', 'orbstack']);
+  assert.deepEqual(upgradeArgs(cask('firefox'), true), ['upgrade', '--cask', '--greedy', '--force', 'firefox']);
 });

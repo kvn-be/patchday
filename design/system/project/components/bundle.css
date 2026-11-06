@@ -52,6 +52,13 @@ body { margin: 0; background: var(--night); color: var(--moon); font-family: var
   .pd-report-row .pd-badge { grid-column: 2; grid-row: 1 / span 2; }
 }
 
+.pd-progress { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: var(--radius-full); background: var(--night-sunk); }
+.pd-progress span { display: block; height: 100%; border-radius: inherit; background: var(--brass); transition: width .3s; }
+.pd-progress-ok span { background: var(--ok); }
+.pd-progress-fail span { background: var(--back); }
+.pd-progress-busy span { width: 30%; animation: pd-busy 1.4s ease-in-out infinite alternate; }
+@keyframes pd-busy { from { margin-left: 0; } to { margin-left: 70%; } }
+
 .pd-dial { display: block; width: 100%; max-width: 620px; aspect-ratio: 1; margin-inline: auto; touch-action: none; cursor: grab; user-select: none; }
 .pd-dial:active { cursor: grabbing; }
 .pd-dial text { font-family: var(--font-text); fill: var(--haze); }
@@ -68,4 +75,7 @@ body { margin: 0; background: var(--night); color: var(--moon); font-family: var
 .pd-dial .glow { fill: var(--glow); }
 .pd-dial .hand { stroke: var(--brass); stroke-width: 3; stroke-linecap: round; }
 .pd-dial .pin { fill: var(--brass); }
-@media (prefers-reduced-motion: reduce) { .pd-btn { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .pd-btn, .pd-progress span { transition: none; }
+  .pd-progress-busy span { width: 100%; animation: none; opacity: .5; }
+}

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { bumpImage } from '../core/compose.ts';
+import { isNewer, MAC_SWAP_SCRIPT, macChecksum, pickRelease } from '../core/selfupdate.ts';
 import { parseWingetUpgrade } from '../core/winget.ts';
 import { registryRef } from './registry.ts';
 import { run, type Deps } from './run.ts';
@@ -115,4 +120,118 @@ test('parseWingetUpgrade cuts columns at the header', () => {
     '1 upgrades available.',
   ].join('\r\n');
   assert.deepEqual(parseWingetUpgrade(output), [{ name: 'Mozilla Firefox', id: 'Mozilla.Firefox', installed: '130.0', available: '131.0' }]);
+});
+
+function packageHarness(platform: NodeJS.Platform, script: (command: string, args: string[], calls: number) => { code: number; stdout?: string; stderr?: string } | null) {
+  let clock = 0;
+  const commands: string[][] = [];
+  const progress: string[] = [];
+  const deps: Deps = {
+    exec: async (command, args) => {
+      commands.push([command, ...args]);
+      if (command === 'docker') return { code: 1, stdout: '', stderr: '' };
+      const calls = commands.filter((entry) => entry.join(' ') === [command, ...args].join(' ')).length;
+      return { stdout: '', stderr: '', ...(script(command, args, calls) ?? { code: 0 }) };
+    },
+    tags: async () => [],
+    portainer: null,
+    platform,
+    arch: 'arm64',
+    backupDir: '/backup',
+    readFile: async () => '',
+    writeFile: async () => {},
+    sleep: async (ms) => { clock += ms; },
+    now: () => new Date(clock),
+    log: () => {},
+    onProgress: (items) => { progress.push(items.map((item) => `${item.name}:${item.state}`).join(',')); },
+  };
+  return { deps, commands, progress };
+}
+
+const WINGET_LIST = ['Name  Id     Version Available Source', '--------------------------------------', 'Fire  Fox.F  1.0     2.0       winget', 'Note  Pad.N  1.0     2.0       winget'].join('\n');
+
+test('winget: a running app is retried and a failure keeps its short reason', async () => {
+  const { deps, progress } = packageHarness('win32', (command, args, calls) => {
+    if (args[0] === 'upgrade' && args[1] === '--id') {
+      if (args[2] === 'Fox.F') return calls === 1 ? { code: 0x8a150101 - 2 ** 32 } : { code: 0 };
+      return { code: 0x8a150105 - 2 ** 32 };
+    }
+    if (args[0] === 'upgrade') return { code: 0, stdout: calls === 1 ? WINGET_LIST : [WINGET_LIST.split('\n')[0], WINGET_LIST.split('\n')[1], WINGET_LIST.split('\n')[3]].join('\n') };
+    return null;
+  });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply');
+  const [fox, pad] = report.items;
+  assert.equal(fox.outcome, 'applied');
+  assert.equal(pad.outcome, 'failed');
+  assert.equal(pad.reason, 'disk is full');
+  assert.equal(progress[0], 'Fire:queued,Note:queued');
+  assert.equal(progress.at(-1), 'Fire:done,Note:failed');
+});
+
+test('winget: a restart needed to finish counts as applied', async () => {
+  const { deps } = packageHarness('win32', (_command, args) => {
+    if (args[1] === '--id') return { code: 3010 };
+    if (args[0] === 'upgrade') return { code: 0, stdout: WINGET_LIST };
+    return null;
+  });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply');
+  assert.deepEqual(report.items.map((item) => [item.outcome, item.reason]), [['applied', 'restart to finish'], ['applied', 'restart to finish']]);
+});
+
+test('brew: an existing app is repaired with one forced retry', async () => {
+  const outdated = JSON.stringify({ formulae: [], casks: [{ name: 'firefox', installed_versions: '1', current_version: '2' }] });
+  let fixed = false;
+  const { deps, commands } = packageHarness('darwin', (_command, args) => {
+    if (args[0] === 'outdated') return { code: 0, stdout: fixed ? '{}' : outdated };
+    if (args[0] === 'upgrade') {
+      if (!args.includes('--force')) return { code: 1, stderr: 'Error: It seems there is already an App at /Applications/Firefox.app' };
+      fixed = true;
+    }
+    return null;
+  });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply');
+  assert.equal(report.items[0].outcome, 'applied');
+  assert.ok(commands.some((command) => command.includes('--force')));
+});
+
+test('brew: a failed package names the cause, not a command', async () => {
+  const outdated = JSON.stringify({ formulae: [], casks: [{ name: 'tool', installed_versions: '1', current_version: '2' }] });
+  const { deps } = packageHarness('darwin', (_command, args) => {
+    if (args[0] === 'outdated') return { code: 0, stdout: outdated };
+    if (args[0] === 'upgrade') return { code: 1, stderr: 'sudo: a terminal is required to read the password' };
+    return null;
+  });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply');
+  assert.equal(report.items[0].reason, 'needs your admin password');
+});
+
+test('self update picks the highest published version and skips drafts', () => {
+  const release = (tag_name: string, draft = false) => ({ tag_name, draft, assets: [{ name: 'a.zip', browser_download_url: 'https://x/a.zip' }] });
+  assert.equal(pickRelease([release('v0.3.0', true), release('v0.2.1'), release('v0.2.0')], '0.2.0')?.version, '0.2.1');
+  assert.equal(pickRelease([release('v0.2.0'), release('v0.1.0')], '0.2.0'), null);
+  assert.equal(isNewer('v0.10.0', '0.9.9'), true);
+  assert.equal(isNewer('v1.0.0-beta', '0.9.9'), false);
+});
+
+test('macChecksum reads the checksum of exactly one file', () => {
+  const yml = 'version: 0.3.0\nfiles:\n  - url: Patchday-0.3.0-arm64.zip\n    sha512: AAA==\n    size: 1\n  - url: Patchday-0.3.0-x64.zip\n    sha512: BBB==\n    size: 2\npath: x\n';
+  assert.equal(macChecksum(yml, 'Patchday-0.3.0-x64.zip'), 'BBB==');
+  assert.equal(macChecksum(yml, 'other.zip'), null);
+});
+
+test('the swap script keeps the old app when the new one cannot be moved', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'swap-'));
+  const script = join(folder, 'swap.sh');
+  await writeFile(script, MAC_SWAP_SCRIPT.replace('open "$2"', 'true'));
+  await mkdir(join(folder, 'Old.app'));
+  await writeFile(join(folder, 'Old.app', 'old'), '1');
+  await mkdir(join(folder, 'New.app'));
+  await writeFile(join(folder, 'New.app', 'new'), '1');
+  const swap = (fresh: string) => new Promise((done) => execFile('bash', [script, '999999', join(folder, 'Old.app'), fresh], done));
+  await swap(join(folder, 'Missing.app'));
+  assert.deepEqual(await readdir(join(folder, 'Old.app')), ['old']);
+  await swap(join(folder, 'New.app'));
+  assert.deepEqual(await readdir(join(folder, 'Old.app')), ['new']);
+  assert.ok(!(await readdir(folder)).includes('Old.app.previous'));
+  await rm(folder, { recursive: true });
 });

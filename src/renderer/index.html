@@ -29,6 +29,12 @@
   </div>
 </header>
 
+<div class="self-update" id="self-update" hidden>
+  <p id="self-text"></p>
+  <button class="pd-btn pd-btn-main" id="self-install" type="button" data-i18n="selfInstall"></button>
+  <div class="pd-progress" id="self-bar" role="progressbar" hidden><span></span></div>
+</div>
+
 <main class="app">
   <section class="schedule" aria-labelledby="schedule-title">
     <h1 id="schedule-title" data-i18n="scheduleTitle"></h1>
@@ -50,6 +56,7 @@
       <div class="settings-body">
         <label class="toggle"><input type="checkbox" id="apply"><span data-i18n="applyLabel"></span></label>
         <p class="hint" data-i18n="applyHint"></p>
+        <div class="admin-row" id="admin-row" hidden><p class="hint" id="admin-state"></p><button class="pd-btn pd-btn-line" id="admin-setup" type="button" data-i18n="adminAllow"></button></div>
         <label class="toggle"><input type="checkbox" id="minor"><span data-i18n="minorLabel"></span></label>
         <label class="field"><span data-i18n="holdsLabel"></span><input id="holds" type="text" autocomplete="off" spellcheck="false"></label>
         <label class="field"><span data-i18n="portainerUrl"></span><input id="portainer-url" type="url" placeholder="https://127.0.0.1:9443" autocomplete="off" spellcheck="false"></label>
@@ -67,6 +74,14 @@
   <div class="actions">
     <button class="pd-btn pd-btn-main" id="confirm-yes" type="button" data-i18n="confirmYes"></button>
     <button class="pd-btn pd-btn-line" id="confirm-no" type="button" data-i18n="cancel"></button>
+  </div>
+</dialog>
+<dialog id="admin">
+  <h2 data-i18n="adminTitle"></h2>
+  <p data-i18n="adminText"></p>
+  <div class="actions">
+    <button class="pd-btn pd-btn-main" id="admin-yes" type="button" data-i18n="adminAllow"></button>
+    <button class="pd-btn pd-btn-line" id="admin-no" type="button" data-i18n="notNow"></button>
   </div>
 </dialog>
 <script src="bundle.js"></script>

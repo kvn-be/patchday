@@ -9,17 +9,20 @@
 body { font: 400 var(--step-0)/1.55 var(--font-text); }
 .pd-header { position: sticky; top: 0; z-index: 2; background: var(--night); -webkit-app-region: drag; }
 .pd-header button, .pd-header .pd-lang { -webkit-app-region: no-drag; }
-body.mac .pd-header { padding-left: 84px; }
 
-.app { display: grid; gap: var(--space-4); max-width: 1240px; margin-inline: auto; padding: var(--space-3) 16px var(--space-5); }
-.app > * { min-width: 0; }
-@media (min-width: 720px) { .app { padding-inline: var(--space-5); } }
-@media (min-width: 960px) { .app { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); align-items: start; } .schedule { position: sticky; top: 84px; } }
+/* The window keeps 16:9 and the whole page zooms with it, so this layout is always 1280 x 720. */
+html, body { height: 100%; overflow: hidden; }
+body { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.app { display: grid; grid-template-columns: 500px minmax(0, 1fr); gap: var(--space-5); min-height: 0; padding: var(--space-3) var(--space-5); }
+.app > * { min-width: 0; min-height: 0; }
 
-h1 { margin: 0; font: 400 var(--step-2)/1.08 var(--font-display); text-wrap: balance; }
+h1 { margin: 0; font: 400 34px/1.1 var(--font-display); white-space: nowrap; }
 h2 { margin: 0; font: 400 var(--step-1)/1.2 var(--font-display); }
 p { margin: 0; }
-.schedule, .work, .settings-body { display: grid; gap: var(--space-2); }
+.schedule, .settings-body { display: grid; gap: var(--space-1); align-content: start; }
+.work { display: flex; flex-direction: column; gap: var(--space-2); }
+.work .pd-window { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.schedule .pd-dial { max-width: 396px; }
 .schedule input[type="range"] { width: 100%; accent-color: var(--brass); }
 .dial-label { display: grid; gap: 4px; color: var(--haze); font-size: 14px; text-align: center; }
 .hint { color: var(--haze); font-size: 15px; }
@@ -31,16 +34,11 @@ p { margin: 0; }
 .field { display: grid; gap: 4px; color: var(--haze); font-size: 14px; }
 .field input { min-height: 40px; padding: 0 12px; border: 1px solid var(--control-line); border-radius: var(--radius-field); background: var(--night-sunk); color: var(--moon); font: 15px var(--font-text); }
 
-.settings { border-top: 1px solid var(--line); padding-top: var(--space-2); }
-.settings summary { cursor: pointer; font-weight: 600; min-height: 32px; }
-.settings-body { padding-top: var(--space-2); }
 
 .pd-report-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .pd-reason { grid-column: 1 / -1; color: var(--haze); font-size: 13px; }
-.self-update { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); padding: var(--space-2) 16px; background: var(--night-sunk); border-bottom: 1px solid var(--line); }
+.self-update { display: grid; gap: 6px; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--night-sunk); }
 .self-update[hidden], .self-update .pd-progress[hidden] { display: none; }
-.self-update p { flex: 1 1 240px; min-width: 0; }
-.self-update .pd-progress { flex: 1 1 100%; }
 .overall { display: grid; gap: 6px; padding: var(--space-3); }
 .admin-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
 .admin-row[hidden] { display: none; }
@@ -48,11 +46,7 @@ p { margin: 0; }
 .empty p { color: var(--haze); }
 .notes { padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); color: var(--haze); font-size: 14px; }
 
-dialog { max-width: 440px; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-window); background: var(--night-raised); color: var(--moon); box-shadow: var(--shadow-window); }
+dialog { width: 560px; max-width: 560px; max-height: 660px; overflow-y: auto; padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-window); background: var(--night-raised); color: var(--moon); box-shadow: var(--shadow-window); }
 dialog > * + * { margin-top: var(--space-2); }
 dialog::backdrop { background: rgba(4, 5, 20, .6); }
 
-@media (max-width: 520px) {
-  .pd-header .coffee-text, .pd-header .pd-badge-plain { display: none; }
-  .pd-header .pd-btn-coffee { width: 44px; padding: 0; }
-}

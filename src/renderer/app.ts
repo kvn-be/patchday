@@ -11,6 +11,7 @@ interface Api {
   coffee(): Promise<void>;
   setupAdmin(): Promise<boolean>;
   checkSelf(): Promise<string | null>;
+  manualCheckSelf(): Promise<string | null>;
   installSelf(): Promise<void>;
   onSelfProgress(listener: (percent: number) => void): void;
   onSelfAvailable(listener: (version: string) => void): void;
@@ -187,8 +188,9 @@ function renderText(): void {
   $('token-state').textContent = hasToken ? t().tokenSaved : t().tokenNone;
   $('admin-state').textContent = adminMessage || (adminReady ? t().adminOn : t().adminOff);
   $('admin-setup').hidden = adminReady;
-  $('self-update').hidden = !selfVersion;
+  $('self-update').hidden = !selfVersion && !selfMessage;
   $('self-text').textContent = selfMessage || (t().selfAvailable as string).replace('{version}', selfVersion ?? '');
+  $('self-update-button').className = `pd-btn ${selfVersion ? 'pd-btn-main' : 'pd-btn-line'}`;
 }
 
 function renderAll(): void {
@@ -231,7 +233,6 @@ async function start(): Promise<void> {
   hasToken = state.hasToken;
   adminReady = state.adminReady;
   report = state.reports[0] ?? null;
-  if (state.platform === 'darwin') document.body.classList.add('mac');
   $('version').textContent = state.version;
   $<HTMLInputElement>('enabled').checked = settings.scheduleEnabled;
   $<HTMLInputElement>('apply').checked = settings.applyUpdates;
@@ -263,6 +264,9 @@ async function start(): Promise<void> {
     hasToken = true;
     renderText();
   });
+  const settingsDialog = $<HTMLDialogElement>('settings');
+  $('settings-open').addEventListener('click', () => settingsDialog.showModal());
+  $('settings-close').addEventListener('click', () => settingsDialog.close());
   $('check').addEventListener('click', () => void perform(api.check, t().checking));
   const dialog = $<HTMLDialogElement>('confirm');
   $('update').addEventListener('click', () => dialog.showModal());
@@ -288,12 +292,23 @@ async function start(): Promise<void> {
     track.setAttribute('aria-valuenow', String(percent));
     (track.firstElementChild as HTMLElement).style.width = `${percent}%`;
   });
-  $('self-install').addEventListener('click', async () => {
-    const button = $<HTMLButtonElement>('self-install');
+  $('self-update-button').addEventListener('click', async () => {
+    const button = $<HTMLButtonElement>('self-update-button');
     button.disabled = true;
-    selfMessage = t().selfRunning;
+    selfMessage = t().selfChecking;
     renderText();
     try {
+      const version = await api.manualCheckSelf();
+      if (!version) {
+        selfVersion = null;
+        selfMessage = state.packaged ? (t().selfCurrent as string).replace('{version}', state.version) : t().selfDev;
+        button.disabled = false;
+        renderText();
+        return;
+      }
+      selfVersion = version;
+      selfMessage = t().selfRunning;
+      renderText();
       await api.installSelf();
     } catch (error) {
       button.disabled = false;

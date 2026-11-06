@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('patchday', {
   saveToken: (token: string) => ipcRenderer.invoke('token', token),
   coffee: () => ipcRenderer.invoke('coffee'),
   checkSelf: () => ipcRenderer.invoke('self-check'),
+  manualCheckSelf: () => ipcRenderer.invoke('self-check-manual'),
   installSelf: () => ipcRenderer.invoke('self-install'),
   onSelfProgress: (listener: (percent: number) => void) => ipcRenderer.on('self-progress', (_event, percent) => listener(percent)),
   onSelfAvailable: (listener: (version: string) => void) => ipcRenderer.on('self-available', (_event, version) => listener(version)),

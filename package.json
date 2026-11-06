@@ -1,6 +1,6 @@
 {
   "name": "patchday",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Scheduled, rule-based updates for Homebrew, winget and Docker with backup and rollback.",
   "license": "MIT",
   "funding": "https://ko-fi.com/kvnbe",

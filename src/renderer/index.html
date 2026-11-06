@@ -14,6 +14,7 @@
     <b>Patchday</b>
   </div>
   <span class="pd-badge pd-badge-plain" id="version"></span>
+  <button class="pd-btn pd-btn-line" id="self-update-button" type="button" data-i18n="selfInstall"></button>
   <div class="pd-header-tools">
     <div class="pd-lang" role="group" aria-label="Language / Sprache">
       <button type="button" data-lang="en" aria-pressed="true">EN</button>
@@ -29,12 +30,6 @@
   </div>
 </header>
 
-<div class="self-update" id="self-update" hidden>
-  <p id="self-text"></p>
-  <button class="pd-btn pd-btn-main" id="self-install" type="button" data-i18n="selfInstall"></button>
-  <div class="pd-progress" id="self-bar" role="progressbar" hidden><span></span></div>
-</div>
-
 <main class="app">
   <section class="schedule" aria-labelledby="schedule-title">
     <h1 id="schedule-title" data-i18n="scheduleTitle"></h1>
@@ -45,15 +40,23 @@
   </section>
 
   <section class="work">
+    <div class="self-update" id="self-update" role="status" hidden>
+      <p id="self-text"></p>
+      <div class="pd-progress" id="self-bar" role="progressbar" hidden><span></span></div>
+    </div>
     <div class="actions">
       <button class="pd-btn pd-btn-main" id="check" type="button" data-i18n="check"></button>
       <button class="pd-btn pd-btn-line" id="update" type="button" data-i18n="update"></button>
+      <button class="pd-btn pd-btn-line" id="settings-open" type="button" data-i18n="settings"></button>
       <span class="progress" id="progress" role="status"></span>
     </div>
     <div class="pd-window" id="report"></div>
-    <details class="settings">
-      <summary data-i18n="settings"></summary>
-      <div class="settings-body">
+  </section>
+</main>
+
+<dialog id="settings">
+  <h2 data-i18n="settings"></h2>
+  <div class="settings-body">
         <label class="toggle"><input type="checkbox" id="apply"><span data-i18n="applyLabel"></span></label>
         <p class="hint" data-i18n="applyHint"></p>
         <div class="admin-row" id="admin-row" hidden><p class="hint" id="admin-state"></p><button class="pd-btn pd-btn-line" id="admin-setup" type="button" data-i18n="adminAllow"></button></div>
@@ -64,9 +67,8 @@
         <p class="hint" id="token-state"></p>
         <div><button class="pd-btn pd-btn-line" id="save-token" type="button" data-i18n="saveToken"></button></div>
       </div>
-    </details>
-  </section>
-</main>
+  <div class="actions"><button class="pd-btn pd-btn-main" id="settings-close" type="button" data-i18n="done"></button></div>
+</dialog>
 
 <dialog id="confirm">
   <h2 data-i18n="confirmTitle"></h2>

@@ -46,7 +46,8 @@ Use 24-hour time in both languages. Write versions as `3.4.0 → 3.4.1`. Keep pr
 - Size type with `step-0` to `step-3` and sections with `space-section`. Fixed pixel sizes in the type styles are the upper limits.
 - Keep content in a 1240px column with a 16px gutter, 40px (`space-5`) from 720px up.
 - Align left. Only the week dial is centred.
-- Stack columns to one below 960px. The app window must work from 400px wide.
+- The app window keeps 16:9, from 960 x 540 to 1920 x 1080. Lay it out once for 1280 x 720; the page zooms with the window. Only the report scrolls.
+- The website stacks columns to one below 960px and must work from 400px wide.
 
 ## Shape and depth
 

@@ -10,7 +10,7 @@
 
 <p align="center">
   <img alt="Platforms: macOS and Windows" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-1a1d3b">
-  <img alt="Version 0.2.0" src="https://img.shields.io/badge/version-0.2.0-dcbb7b">
+  <img alt="Version 0.2.1" src="https://img.shields.io/badge/version-0.2.1-dcbb7b">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-1a1d3b">
   <a href="https://ko-fi.com/kvnbe"><img alt="Buy me a coffee on Ko-fi" src="https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-dcbb7b"></a>
 </p>
@@ -51,7 +51,7 @@
 - **Recover from bad updates.** A stack that does not come back healthy returns to its old version.
 - **Watch it happen.** Every update has its own progress bar, and failures show a short reason.
 - **Fix common failures.** Busy apps, bad downloads and network errors are retried once automatically.
-- **Update itself.** Patchday shows when a new version is out and installs it with one click.
+- **Update itself.** The **Update Patchday** button looks for a new version and installs it. Patchday also tells you when one is out.
 - **Allow admin rights once.** On Windows, one confirmation replaces a prompt for every app.
 - **English and German.** Dark by default, with a light theme.
 
@@ -66,14 +66,14 @@ Download the latest version from the [Releases page](https://github.com/kvn-be/p
 
 ### Windows
 
-1. Download and run `Patchday-Setup-0.2.0.exe`.
+1. Download and run `Patchday-Setup-0.2.1.exe`.
 2. If Windows shows "Windows protected your PC", select **More info**, then **Run anyway**. The warning appears because the app is not signed yet.
 3. Follow the installer and start Patchday.
 4. On first start, select **Allow once** and confirm the Windows prompt. Patchday creates a task that installs updates without asking again. You can do this later in **Settings**.
 
 ### macOS
 
-1. Download and open `Patchday-0.2.0-arm64.dmg` for Apple silicon, or `Patchday-0.2.0-x64.dmg` for Intel Macs.
+1. Download and open `Patchday-0.2.1-arm64.dmg` for Apple silicon, or `Patchday-0.2.1-x64.dmg` for Intel Macs.
 2. Drag Patchday to **Applications**.
 3. Start it. macOS blocks unsigned apps, so go to **System Settings > Privacy & Security** and select **Open Anyway**.
 
@@ -87,7 +87,7 @@ A Homebrew tap is planned but not available yet.
 2. Read the list. **Planned** would run automatically, **Waiting for you** would not.
 3. Pick a time on the dial. The arcs mark the quiet hours from 00:00 to 06:00.
 4. Turn on **Run on this schedule**. Scheduled runs now report what would change.
-5. When you trust the results, open **Settings** and turn on **Install updates on schedule**.
+5. When you trust the results, select **Settings** and turn on **Install updates on schedule**.
 
 To update right away, select **Update now** and confirm. Containers and apps may restart.
 

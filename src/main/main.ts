@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification, safeStorage, screen, shell } from 'electron';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createPortainerClient } from '../engine/portainer.ts';
@@ -76,16 +76,36 @@ function program(): string[] {
   return app.isPackaged ? [process.execPath, SCHEDULED_FLAG] : [process.execPath, app.getAppPath(), SCHEDULED_FLAG];
 }
 
+// The page is laid out once for this size. The window keeps its shape and the page zooms with it.
+const DESIGN_WIDTH = 1280;
+const DESIGN_HEIGHT = 720;
+const MIN_WIDTH = 960;
+const MAX_WIDTH = 1920;
+
 function createWindow(): void {
+  const area = screen.getPrimaryDisplay().workAreaSize;
+  const room = Math.floor(Math.min(area.width, ((area.height - 40) * DESIGN_WIDTH) / DESIGN_HEIGHT));
+  const width = Math.max(MIN_WIDTH, Math.min(DESIGN_WIDTH, room));
   const window = new BrowserWindow({
-    width: 1180,
-    height: 820,
-    minWidth: 420,
-    minHeight: 560,
+    width,
+    height: Math.round((width * DESIGN_HEIGHT) / DESIGN_WIDTH),
+    useContentSize: true,
+    maximizable: false,
+    fullscreenable: false,
     backgroundColor: '#12142b',
     title: 'Patchday',
     webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
+  window.setAspectRatio(DESIGN_WIDTH / DESIGN_HEIGHT);
+  window.setContentSize(width, Math.round((width * DESIGN_HEIGHT) / DESIGN_WIDTH));
+  const frameWidth = window.getSize()[0] - window.getContentSize()[0];
+  const frameHeight = window.getSize()[1] - window.getContentSize()[1];
+  const heightFor = (contentWidth: number) => Math.round((contentWidth * DESIGN_HEIGHT) / DESIGN_WIDTH) + frameHeight;
+  window.setMinimumSize(MIN_WIDTH + frameWidth, heightFor(MIN_WIDTH));
+  window.setMaximumSize(MAX_WIDTH + frameWidth, heightFor(MAX_WIDTH));
+  const fit = () => window.webContents.setZoomFactor(window.getContentSize()[0] / DESIGN_WIDTH);
+  window.on('resize', fit);
+  window.webContents.on('did-finish-load', fit);
   window.loadFile(join(__dirname, 'renderer', 'index.html'));
   // Nothing inside the app may open other pages.
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -140,6 +160,10 @@ function registerIpc(): void {
   ipcMain.handle('self-check', async () => {
     if (!app.isPackaged) return null;
     return (await findUpdate().catch(() => null))?.version ?? null;
+  });
+  ipcMain.handle('self-check-manual', async () => {
+    if (!app.isPackaged) return null;
+    return (await findUpdate())?.version ?? null;
   });
   ipcMain.handle('self-install', async (event) => {
     const onPercent = (percent: number) => event.sender.send('self-progress', percent);

@@ -205,6 +205,8 @@ async function selfUpdateAsWorker(path: string): Promise<void> {
 
 async function runAsWorker(): Promise<void> {
   const path = data('progress.json');
+  // Installers fail with a path error if the temp folder of this session is gone.
+  await mkdir(app.getPath('temp'), { recursive: true }).catch(() => {});
   const job = await readFile(data('job.json'), 'utf8').catch(() => null);
   await rm(data('job.json'), { force: true });
   if (job && JSON.parse(job).action === 'self-update') return selfUpdateAsWorker(path);

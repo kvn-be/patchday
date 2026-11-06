@@ -8,13 +8,19 @@ export interface Diagnosis {
 }
 
 const UNKNOWN = 'installer stopped with an error';
+const PATH_PROBLEM: Diagnosis = { reason: 'a folder of the installed app is missing', fix: 'force-retry' };
+const PATH_TEXT = /cannot find the path|path not found|path specified|invalid path|Pfad nicht|angegebene Pfad|Pfad ist/i;
+
+function hex(code: number): string {
+  return `0x${(code >>> 0).toString(16).toUpperCase()}`;
+}
 
 // From winget's return code documentation.
 const WINGET: Record<number, Diagnosis> = {
   0x8a150010: { reason: 'no installer for this system' },
   0x8a150011: { reason: 'download did not match its checksum', fix: 'refresh-retry' },
   0x8a150019: { reason: 'needs administrator rights' },
-  0x8a15002b: { reason: 'no update path from the installed version' },
+  0x8a15002b: { reason: 'no update path from the installed version', fix: 'force-retry' },
   0x8a15003a: { reason: 'blocked by a Group Policy' },
   0x8a15004f: { reason: 'installed version is already newer' },
   0x8a150050: { reason: 'installed version is unknown' },
@@ -44,12 +50,30 @@ const WINGET: Record<number, Diagnosis> = {
 export function diagnoseWinget(code: number, output: string): Diagnosis {
   const known = WINGET[code >>> 0];
   if (known) return known;
+  // Windows error codes 2 and 3, also as HRESULT; 206 is a path that is too long.
+  if ([2, 3, 0x80070002, 0x80070003].includes(code >>> 0) || PATH_TEXT.test(output)) return PATH_PROBLEM;
+  if ([206, 0x800700ce].includes(code >>> 0)) return { reason: 'a file path is too long' };
   // Installers report their own codes: 1602 cancelled, 1618 busy, 3010 restart needed.
   if (code === 3010 || code === 1641) return { reason: 'restart to finish', applied: true };
   if (code === 1618) return { reason: 'another installation is running', fix: 'wait-retry' };
   if (code === 1602) return { reason: 'installation was cancelled' };
   if (/network|timed? ?out|connection/i.test(output)) return { reason: 'download failed', fix: 'retry' };
-  return { reason: UNKNOWN };
+  return { reason: `${UNKNOWN} (${hex(code)})` };
+}
+
+const CHOCO: Array<[RegExp, Diagnosis]> = [
+  [/not.*elevated|administrative permissions|Access to the path .* is denied/i, { reason: 'needs administrator rights' }],
+  [/being used by another process|in use/i, { reason: 'app is in use, close it', fix: 'wait-retry' }],
+  [/another (instance|process)|lock file/i, { reason: 'another installation is running', fix: 'wait-retry' }],
+  [/checksum/i, { reason: 'download did not match its checksum' }],
+  [/timed? ?out|Unable to connect|could not be resolved|\(404\)|\(503\)/i, { reason: 'download failed', fix: 'retry' }],
+  [/not enough space|disk full/i, { reason: 'disk is full' }],
+  [PATH_TEXT, { reason: 'a folder of the installed app is missing', fix: 'force-retry' }],
+];
+
+export function diagnoseChoco(code: number, output: string): Diagnosis {
+  if (code === 3010 || code === 1641 || code === 350) return { reason: 'restart to finish', applied: true };
+  return CHOCO.find(([pattern]) => pattern.test(output))?.[1] ?? { reason: `${UNKNOWN} (${code})` };
 }
 
 const BREW: Array<[RegExp, Diagnosis]> = [

@@ -235,3 +235,93 @@ test('the swap script keeps the old app when the new one cannot be moved', async
   assert.ok(!(await readdir(folder)).includes('Old.app.previous'));
   await rm(folder, { recursive: true });
 });
+
+test('winget: a path error is repaired with a forced install', async () => {
+  let done = false;
+  const { deps, commands } = packageHarness('win32', (command, args) => {
+    if (command === 'choco') return { code: 1 };
+    if (args[0] === 'install') { done = true; return { code: 0 }; }
+    if (args[1] === '--id') return { code: 1, stdout: 'The system cannot find the path specified.' };
+    if (args[0] === 'upgrade') return { code: 0, stdout: done ? '' : ['Name  Id     Version Available Source', '--------------------------------------', 'Fire  Fox.F  1.0     2.0       winget'].join('\n') };
+    return null;
+  });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply');
+  assert.equal(report.items[0].outcome, 'applied');
+  assert.ok(commands.some((command) => command.includes('install') && command.includes('--force')));
+});
+
+test('winget: a shortened id is matched by prefix, unknown errors keep their code', async () => {
+  const { deps, commands } = packageHarness('win32', (command, args) => {
+    if (command === 'choco') return { code: 1 };
+    if (args[1] === '--id') return { code: 0x80004005 - 2 ** 32, stdout: 'Installer failed\nsome detail' };
+    if (args[0] === 'upgrade') return { code: 0, stdout: ['Name  Id         Version Available Source', '------------------------------------------', 'Long  Very.Lon…  1.0     2.0       winget'].join('\n') };
+    return null;
+  });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply');
+  const call = commands.find((command) => command[2] === '--id') as string[];
+  assert.equal(call[3], 'Very.Lon');
+  assert.ok(!call.includes('--exact'));
+  assert.equal(report.items[0].reason, 'installer stopped with an error (0x80004005)');
+  assert.match(report.items[0].detail as string, /some detail/);
+});
+
+test('choco: runs before winget, skips pinned packages, and winget skips what it updated', async () => {
+  let updated = false;
+  const { deps, commands } = packageHarness('win32', (command, args) => {
+    if (command === 'choco') {
+      if (args[0] === '--version') return { code: 0, stdout: '2.3.0' };
+      if (args[0] === 'outdated') return { code: 0, stdout: updated ? 'Chocolatey v2.3.0\nkeep|1.0|2.0|true\n' : 'Chocolatey v2.3.0\nfirefox|130.0|131.0|false\nkeep|1.0|2.0|true\n' };
+      if (args[0] === 'upgrade') { updated = true; return { code: 0 }; }
+    }
+    if (args[0] === 'upgrade' && args[1] !== '--id') return { code: 0, stdout: updated ? '' : ['Name  Id     Version Available Source', '--------------------------------------', 'Fire  Fox.F  130.0   131.0     winget'].join('\n') };
+    return null;
+  });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply');
+  const by = (name: string) => report.items.find((item) => item.name === name);
+  assert.equal(by('keep')?.outcome, 'waiting');
+  assert.equal(by('firefox')?.outcome, 'applied');
+  assert.equal(by('Fire')?.reason, 'already updated by Chocolatey');
+  assert.ok(!commands.some((command) => command[0] === 'winget' && command[2] === '--id'));
+});
+
+test('parseWingetUpgrade ignores notices and the second table below the packages', () => {
+  const output = [
+    'Name            Id              Version  Available Source',
+    '---------------------------------------------------------',
+    'Mozilla Firefox Mozilla.Firefox 130.0    131.0     winget',
+    '1 upgrades available.',
+    '',
+    '2 package(s) have version numbers that cannot be determined. Use --include-unknown to see all results.',
+    'The following packages have an upgrade available, but require explicit targeting for upgrade:',
+    'Name  Id       Version Available Source',
+    '---------------------------------------',
+    'Other Some.App 1.0     2.0       winget',
+  ].join('\r\n');
+  assert.deepEqual(parseWingetUpgrade(output).map((entry) => entry.id), ['Mozilla.Firefox']);
+});
+
+test('winget: success without a new version gets one forced install', async () => {
+  let forced = false;
+  const { deps } = packageHarness('win32', (command, args) => {
+    if (command === 'choco') return { code: 1 };
+    if (args[0] === 'install') { forced = true; return { code: 0 }; }
+    if (args[1] === '--id') return { code: 0 };
+    if (args[0] === 'upgrade') return { code: 0, stdout: forced ? '' : ['Name  Id     Version Available Source', '--------------------------------------', 'Fire  Fox.F  1.0     2.0       winget'].join('\n') };
+    return null;
+  });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply');
+  assert.equal(report.items[0].outcome, 'applied');
+  assert.ok(forced);
+});
+
+test('winget: no update path is repaired with a forced install', async () => {
+  let forced = false;
+  const { deps } = packageHarness('win32', (command, args) => {
+    if (command === 'choco') return { code: 1 };
+    if (args[0] === 'install') { forced = true; return { code: 0 }; }
+    if (args[1] === '--id') return { code: 0x8a15002b - 2 ** 32 };
+    if (args[0] === 'upgrade') return { code: 0, stdout: forced ? '' : ['Name  Id     Version Available Source', '--------------------------------------', 'Fire  Fox.F  1.0     2.0       winget'].join('\n') };
+    return null;
+  });
+  assert.equal((await run(deps, DEFAULT_SETTINGS, 'apply')).items[0].outcome, 'applied');
+});

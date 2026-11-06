@@ -129,6 +129,11 @@ function renderReport(): void {
     );
     if (report.mode === 'apply' && item.outcome !== 'waiting') row.append(bar(item.outcome === 'applied' ? 'ok' : 'fail', 100, item.name));
     row.append(element('span', 'pd-reason', reason(language, item.reason)));
+    if (item.detail) {
+      const more = element('details', 'pd-detail');
+      more.append(element('summary', '', t().details), element('pre', '', item.detail));
+      row.append(more);
+    }
     box.append(row);
   }
   for (const note of report.notes) box.append(element('div', 'notes', note));

@@ -23,7 +23,7 @@ export const STRINGS = {
     adminAllow: 'Allow once', notNow: 'Not now', adminOn: 'Admin access is set up. Updates run without prompts.', adminOff: 'Without admin access, Windows may ask for every app.', adminDenied: 'Admin access was not granted.',
     overall: 'updates finished', queued: 'Waiting', phaseBackup: 'Backing up', phaseUpdate: 'Installing', phaseTest: 'Testing', phaseRollback: 'Rolling back', phaseRetry: 'Fixing and retrying',
     selfAvailable: 'Patchday {version} is available.', selfInstall: 'Update Patchday', selfChecking: 'Looking for a new Patchday version…', selfCurrent: 'Patchday {version} is the latest version.', selfDev: 'Development builds do not update themselves.', done: 'Done', selfRunning: 'Updating Patchday. It restarts by itself.', selfFailed: 'Patchday could not update:',
-    preview: 'Preview', run: 'Update run', failedRun: 'The run stopped:',
+    details: 'Show details', preview: 'Preview', run: 'Update run', failedRun: 'The run stopped:',
     days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
     short: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], at: 'at', locale: 'en-US',
   },
@@ -49,7 +49,7 @@ export const STRINGS = {
     adminAllow: 'Einmal erlauben', notNow: 'Nicht jetzt', adminOn: 'Admin-Zugriff ist eingerichtet. Updates laufen ohne Nachfrage.', adminOff: 'Ohne Admin-Zugriff fragt Windows eventuell bei jeder App.', adminDenied: 'Admin-Zugriff wurde nicht erteilt.',
     overall: 'Updates fertig', queued: 'Wartet', phaseBackup: 'Sichert', phaseUpdate: 'Installiert', phaseTest: 'Testet', phaseRollback: 'Rollt zurück', phaseRetry: 'Behebt und versucht erneut',
     selfAvailable: 'Patchday {version} ist verfügbar.', selfInstall: 'Patchday aktualisieren', selfChecking: 'Suche nach neuer Patchday-Version…', selfCurrent: 'Patchday {version} ist die neueste Version.', selfDev: 'Entwicklungsversionen aktualisieren sich nicht selbst.', done: 'Fertig', selfRunning: 'Patchday wird aktualisiert und startet von selbst neu.', selfFailed: 'Patchday konnte nicht aktualisiert werden:',
-    preview: 'Vorschau', run: 'Update-Lauf', failedRun: 'Der Lauf wurde abgebrochen:',
+    details: 'Details anzeigen', preview: 'Vorschau', run: 'Update-Lauf', failedRun: 'Der Lauf wurde abgebrochen:',
     days: ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'],
     short: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'], at: 'um', locale: 'de-DE',
   },
@@ -61,6 +61,11 @@ const REASONS_DE: Record<string, string> = {
   'minor update': 'Minor-Update',
   'major update': 'Major-Update',
   'Homebrew update': 'Homebrew-Update',
+  'Chocolatey update': 'Chocolatey-Update',
+  'pinned in Chocolatey': 'in Chocolatey festgepinnt',
+  'already updated by Chocolatey': 'schon durch Chocolatey aktualisiert',
+  'a folder of the installed app is missing': 'ein Ordner der installierten App fehlt',
+  'a file path is too long': 'ein Dateipfad ist zu lang',
   'winget update': 'winget-Update',
   'tag schemes differ': 'Tag-Schemata unterscheiden sich',
   'on hold list': 'steht auf der Sperrliste',
@@ -124,5 +129,7 @@ const REASONS_DE: Record<string, string> = {
 };
 
 export function reason(language: Language, text: string): string {
-  return language === 'de' ? (REASONS_DE[text] ?? text) : text;
+  if (language !== 'de') return text;
+  const coded = /^installer stopped with an error( \(.+\))$/.exec(text);
+  return coded ? `${REASONS_DE['installer stopped with an error']}${coded[1]}` : (REASONS_DE[text] ?? text);
 }

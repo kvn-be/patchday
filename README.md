@@ -5,12 +5,12 @@
 <h1 align="center">Patchday</h1>
 
 <p align="center">
-  Scheduled, rule-based updates for Homebrew, winget and Docker, with a backup first, a health check after, and a rollback if anything fails.
+  Scheduled, rule-based updates for Homebrew, winget, Chocolatey and Docker, with a backup first, a health check after, and a rollback if anything fails.
 </p>
 
 <p align="center">
   <img alt="Platforms: macOS and Windows" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-1a1d3b">
-  <img alt="Version 0.2.1" src="https://img.shields.io/badge/version-0.2.1-dcbb7b">
+  <img alt="Version 0.2.2" src="https://img.shields.io/badge/version-0.2.2-dcbb7b">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-1a1d3b">
   <a href="https://ko-fi.com/kvnbe"><img alt="Buy me a coffee on Ko-fi" src="https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-dcbb7b"></a>
 </p>
@@ -45,7 +45,7 @@
 
 - **Pick your own time.** Drag the hand on a dial with all 168 hours of the week.
 - **See changes before they happen.** **Check now** lists every update and changes nothing.
-- **Update packages.** Homebrew on macOS, winget on Windows.
+- **Update packages.** Homebrew on macOS, winget and Chocolatey on Windows.
 - **Update Docker containers.** Patchday finds Compose stacks by itself and works with Portainer if you use it.
 - **Stay in control.** Risky updates become suggestions that wait for your decision.
 - **Recover from bad updates.** A stack that does not come back healthy returns to its old version.
@@ -66,14 +66,14 @@ Download the latest version from the [Releases page](https://github.com/kvn-be/p
 
 ### Windows
 
-1. Download and run `Patchday-Setup-0.2.1.exe`.
+1. Download and run `Patchday-Setup-0.2.2.exe`.
 2. If Windows shows "Windows protected your PC", select **More info**, then **Run anyway**. The warning appears because the app is not signed yet.
 3. Follow the installer and start Patchday.
 4. On first start, select **Allow once** and confirm the Windows prompt. Patchday creates a task that installs updates without asking again. You can do this later in **Settings**.
 
 ### macOS
 
-1. Download and open `Patchday-0.2.1-arm64.dmg` for Apple silicon, or `Patchday-0.2.1-x64.dmg` for Intel Macs.
+1. Download and open `Patchday-0.2.2-arm64.dmg` for Apple silicon, or `Patchday-0.2.2-x64.dmg` for Intel Macs.
 2. Drag Patchday to **Applications**.
 3. Start it. macOS blocks unsigned apps, so go to **System Settings > Privacy & Security** and select **Open Anyway**.
 
@@ -128,7 +128,7 @@ Patchday uses fixed rules and no AI. A container only updates automatically if e
 | Runs automatically | Suggestion only | Never |
 | --- | --- | --- |
 | Patch updates of healthy containers | Major updates | Delete volumes or databases |
-| Homebrew and winget packages | Databases and caches | `docker system prune` |
+| Homebrew, winget and Chocolatey packages | Databases and caches | `docker system prune` |
 | Minor updates with release notes that show no breaking changes (see [Known limits](#known-limits)) | Network and DNS services such as `cloudflared` | Change a stack behind Portainer's back |
 | | Portainer itself, locally built images, prerelease tags | |
 | | Unhealthy containers and images without a build for your CPU | |
@@ -189,7 +189,7 @@ To find updates, Patchday sends image names to Docker Hub and other public regis
 | The report says `Docker is not reachable` | Start Docker, then select **Check now** again. |
 | A stack shows `Portainer is not connected` | Add the address and token in **Settings**. |
 | A stack shows `not managed by Compose or Portainer` | Portainer is running and no token is saved, or the container was started without Compose. |
-| A package shows **Failed** | The line below it names the cause, for example `app is running, close it`. Fix that and run again. |
+| A package shows **Failed** | The line below it names the cause, for example `app is running, close it`. **Show details** has the tool's own message. |
 | On macOS, a cask shows `needs your admin password` | Patchday does not store your password. Run `brew upgrade --cask <name>` once in the terminal. |
 | A stack shows **Failed** after a rollback | Restore the stack from the backup path shown in the report. |
 | A scheduled run did not start | The computer must be awake and you must be logged in. |
@@ -237,7 +237,7 @@ scripts/      Build script
 - Builds are not signed, so both systems show a warning.
 - Versions before 0.2.0 cannot update themselves, so install 0.2.0 by hand once.
 - Scheduled runs on Windows, the admin task and winget support have had little real-world testing.
-- Homebrew and winget report no percentage, so their bars show activity until a package is finished.
+- Homebrew, winget and Chocolatey report no percentage, so their bars show activity until a package is finished.
 - Some installers refuse to run as administrator. They show that as the reason.
 
 ## Support

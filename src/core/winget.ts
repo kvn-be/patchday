@@ -20,13 +20,16 @@ export function parseWingetUpgrade(output: string): WingetPackage[] {
 
   const packages: WingetPackage[] = [];
   for (const line of lines.slice(rule + 1)) {
-    if (line.length <= available || !line.slice(id, version).trim()) continue;
-    packages.push({
+    const row = {
       name: line.slice(0, id).trim(),
       id: line.slice(id, version).trim(),
       installed: line.slice(version, available).trim(),
       available: line.slice(available, source < 0 ? undefined : source).trim(),
-    });
+    };
+    // The table ends at the first line that is no package. Below it winget prints notices such as
+    // "2 package(s) have version numbers that cannot be determined".
+    if (!row.name || !row.id || /\s/.test(row.id) || !/\d/.test(row.installed + row.available) || !/\d/.test(row.available)) break;
+    packages.push(row);
   }
   return packages;
 }

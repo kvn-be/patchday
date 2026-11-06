@@ -39,6 +39,9 @@ p { margin: 0; }
 .pd-reason { grid-column: 1 / -1; color: var(--haze); font-size: 13px; }
 .self-update { display: grid; gap: 6px; padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--night-sunk); }
 .self-update[hidden], .self-update .pd-progress[hidden] { display: none; }
+.pd-detail { grid-column: 1 / -1; color: var(--haze); font-size: 13px; }
+.pd-detail summary { cursor: pointer; }
+.pd-detail pre { margin: 6px 0 0; padding: var(--space-1); border-radius: var(--radius-field); background: var(--night-sunk); font: 12px/1.4 var(--font-code); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .overall { display: grid; gap: 6px; padding: var(--space-3); }
 .admin-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
 .admin-row[hidden] { display: none; }

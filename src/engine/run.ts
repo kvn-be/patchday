@@ -1,7 +1,8 @@
 import { parseOutdated, restartsDocker, upgradeArgs, upgradeOrder, type OutdatedPackage } from '../core/brew.ts';
 import { bumpImage } from '../core/compose.ts';
 import { parseInspect, type ContainerInfo } from '../core/docker.ts';
-import { diagnoseBrew, diagnoseWinget, type Diagnosis } from '../core/failures.ts';
+import { parseChocoOutdated, type ChocoPackage } from '../core/choco.ts';
+import { diagnoseBrew, diagnoseChoco, diagnoseWinget, type Diagnosis } from '../core/failures.ts';
 import { decide, type Decision } from '../core/policy.ts';
 import { latestTag } from '../core/version.ts';
 import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
@@ -250,8 +251,13 @@ async function outdatedBrew(deps: Deps): Promise<OutdatedPackage[]> {
   return parseOutdated(result.stdout);
 }
 
-function packageItem(source: ItemSource, name: string, from: string, to: string, outcome: ReportItem['outcome'], reason: string): ReportItem {
-  return { source, name, from, to, outcome, reason };
+function packageItem(source: ItemSource, name: string, from: string, to: string, outcome: ReportItem['outcome'], reason: string, detail?: string): ReportItem {
+  return { source, name, from, to, outcome, reason, ...(detail ? { detail } : {}) };
+}
+
+function lastLines(result: ExecResult): string {
+  const lines = `${result.stdout}\n${result.stderr}`.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !/^[-\\|/ ]+$/.test(line));
+  return lines.slice(-12).join('\n').slice(0, 1500);
 }
 
 async function waitForDocker(deps: Deps): Promise<boolean> {
@@ -263,6 +269,12 @@ async function waitForDocker(deps: Deps): Promise<boolean> {
   return false;
 }
 
+interface PackageResult {
+  ok: boolean;
+  reason: string;
+  detail?: string;
+}
+
 interface Attempt {
   install(force: boolean): Promise<ExecResult>;
   diagnose(result: ExecResult): Diagnosis;
@@ -270,22 +282,22 @@ interface Attempt {
 }
 
 // One automatic repair per package: more would hide a real problem and stall the run.
-async function installWithRepair(deps: Deps, tracker: Tracker, source: ItemSource, name: string, attempt: Attempt): Promise<{ ok: boolean; reason: string; repaired: boolean }> {
+async function installWithRepair(deps: Deps, tracker: Tracker, source: ItemSource, name: string, attempt: Attempt): Promise<PackageResult> {
   tracker.step(source, name, 'update', null);
   const first = await attempt.install(false);
-  if (first.code === 0) return { ok: true, reason: '', repaired: false };
+  if (first.code === 0) return { ok: true, reason: '' };
   const diagnosis = attempt.diagnose(first);
-  if (diagnosis.applied) return { ok: true, reason: diagnosis.reason, repaired: false };
-  if (!diagnosis.fix) return { ok: false, reason: diagnosis.reason, repaired: false };
+  if (diagnosis.applied) return { ok: true, reason: diagnosis.reason };
+  if (!diagnosis.fix) return { ok: false, reason: diagnosis.reason, detail: lastLines(first) };
 
   deps.log(`${name}: ${diagnosis.reason}, trying again`);
   tracker.step(source, name, 'retry', null);
   if (diagnosis.fix === 'wait-retry') await deps.sleep(RETRY_WAIT_MS);
   if (diagnosis.fix === 'refresh-retry') await attempt.refresh();
   const second = await attempt.install(diagnosis.fix === 'force-retry');
-  if (second.code === 0) return { ok: true, reason: '', repaired: true };
+  if (second.code === 0) return { ok: true, reason: '' };
   const after = attempt.diagnose(second);
-  return { ok: Boolean(after.applied), reason: after.reason, repaired: false };
+  return { ok: Boolean(after.applied), reason: after.reason, detail: lastLines(second) };
 }
 
 const NO_CHANGE = 'installer finished, but the version did not change';
@@ -299,7 +311,7 @@ async function listBrew(deps: Deps, settings: Settings, apply: boolean): Promise
 }
 
 async function applyBrew(deps: Deps, tracker: Tracker, open: OutdatedPackage[], notes: string[]): Promise<ReportItem[]> {
-  const results = new Map<string, { ok: boolean; reason: string }>();
+  const results = new Map<string, PackageResult>();
   for (const entry of open) {
     const result = await installWithRepair(deps, tracker, 'brew', entry.name, {
       install: (force) => deps.exec('brew', upgradeArgs(entry, force), { timeoutMs: 60 * 60_000, env: BREW_ENV }),
@@ -317,11 +329,11 @@ async function applyBrew(deps: Deps, tracker: Tracker, open: OutdatedPackage[], 
 
   const left = new Set((await outdatedBrew(deps)).map((entry) => entry.name));
   return open.map((entry) => {
-    const result = results.get(entry.name) as { ok: boolean; reason: string };
+    const result = results.get(entry.name) as PackageResult;
     const ok = result.ok && !left.has(entry.name);
     const reason = ok ? result.reason || 'Homebrew update' : result.reason || NO_CHANGE;
     tracker.finish('brew', entry.name, ok, reason);
-    return packageItem('brew', entry.name, entry.installed, entry.available, ok ? 'applied' : 'failed', reason);
+    return packageItem('brew', entry.name, entry.installed, entry.available, ok ? 'applied' : 'failed', reason, ok ? undefined : result.detail);
   });
 }
 
@@ -332,23 +344,73 @@ async function listWinget(deps: Deps, settings: Settings): Promise<WingetPackage
   return parseWingetUpgrade(result.stdout).filter((entry) => !settings.holds.includes(entry.id) && !settings.holds.includes(entry.name) && entry.id !== 'kvn-be.Patchday');
 }
 
+// winget shortens long ids in its table. A shortened id cannot match exactly, so it is matched by prefix.
+function wingetTarget(id: string): string[] {
+  const short = id.replace(/(…|\.\.\.|\uFFFD+|\?)$/, '');
+  return short === id ? ['--id', id, '--exact'] : ['--id', short];
+}
+
 async function applyWinget(deps: Deps, tracker: Tracker, open: WingetPackage[], settings: Settings): Promise<ReportItem[]> {
-  const results = new Map<string, { ok: boolean; reason: string }>();
+  // Chocolatey ran first and may have updated the same apps.
+  const still = new Set((await listWinget(deps, settings)).map((entry) => entry.id));
+  const results = new Map<string, PackageResult>();
   for (const entry of open) {
+    if (!still.has(entry.id)) {
+      results.set(entry.id, { ok: true, reason: 'already updated by Chocolatey' });
+      continue;
+    }
+    const target = wingetTarget(entry.id);
     const result = await installWithRepair(deps, tracker, 'winget', entry.name, {
-      install: () => deps.exec('winget', ['upgrade', '--id', entry.id, '--exact', '--silent', '--accept-package-agreements', ...WINGET_FLAGS], { timeoutMs: 30 * 60_000 }),
+      // A forced install does not depend on the old installation's folders.
+      install: (force) => deps.exec('winget', [force ? 'install' : 'upgrade', ...target, ...(force ? ['--force'] : []), '--silent', '--accept-package-agreements', ...WINGET_FLAGS], { timeoutMs: 30 * 60_000 }),
       diagnose: (failed) => diagnoseWinget(failed.code, `${failed.stdout}\n${failed.stderr}`),
       refresh: () => deps.exec('winget', ['source', 'update'], { timeoutMs: 5 * 60_000 }),
     });
     results.set(entry.id, result);
   }
-  const left = new Set((await listWinget(deps, settings)).map((entry) => entry.id));
+  let left = new Set((await listWinget(deps, settings)).map((entry) => entry.id));
+  // An installer can report success and still leave the old version, for example in another scope.
+  const unchanged = open.filter((entry) => left.has(entry.id) && (results.get(entry.id) as PackageResult).ok && !(results.get(entry.id) as PackageResult).reason);
+  for (const entry of unchanged) {
+    tracker.step('winget', entry.name, 'retry', null);
+    const again = await deps.exec('winget', ['install', ...wingetTarget(entry.id), '--force', '--silent', '--accept-package-agreements', ...WINGET_FLAGS], { timeoutMs: 30 * 60_000 });
+    if (again.code !== 0) results.set(entry.id, { ok: false, reason: diagnoseWinget(again.code, `${again.stdout}\n${again.stderr}`).reason, detail: lastLines(again) });
+  }
+  if (unchanged.length > 0) left = new Set((await listWinget(deps, settings)).map((entry) => entry.id));
   return open.map((entry) => {
-    const result = results.get(entry.id) as { ok: boolean; reason: string };
+    const result = results.get(entry.id) as PackageResult;
     const ok = result.ok && (!left.has(entry.id) || Boolean(result.reason));
     const reason = ok ? result.reason || 'winget update' : result.reason || NO_CHANGE;
     tracker.finish('winget', entry.name, ok, reason);
-    return packageItem('winget', entry.name, entry.installed, entry.available, ok ? 'applied' : 'failed', reason);
+    return packageItem('winget', entry.name, entry.installed, entry.available, ok ? 'applied' : 'failed', reason, ok ? undefined : result.detail);
+  });
+}
+
+async function listChoco(deps: Deps, settings: Settings): Promise<{ open: ChocoPackage[]; held: ChocoPackage[] } | null> {
+  if ((await deps.exec('choco', ['--version'])).code !== 0) return null;
+  const result = await deps.exec('choco', ['outdated', '--limit-output'], { timeoutMs: 10 * 60_000 });
+  const outdated = parseChocoOutdated(result.stdout);
+  const isHeld = (entry: ChocoPackage) => entry.pinned || settings.holds.includes(entry.name);
+  return { open: outdated.filter((entry) => !isHeld(entry)), held: outdated.filter(isHeld) };
+}
+
+async function applyChoco(deps: Deps, tracker: Tracker, open: ChocoPackage[], settings: Settings): Promise<ReportItem[]> {
+  const results = new Map<string, PackageResult>();
+  for (const entry of open) {
+    const result = await installWithRepair(deps, tracker, 'choco', entry.name, {
+      install: (force) => deps.exec('choco', ['upgrade', entry.name, '-y', '--no-progress', ...(force ? ['--force'] : [])], { timeoutMs: 30 * 60_000 }),
+      diagnose: (failed) => diagnoseChoco(failed.code, `${failed.stdout}\n${failed.stderr}`),
+      refresh: async () => {},
+    });
+    results.set(entry.name, result);
+  }
+  const left = new Set(((await listChoco(deps, settings))?.open ?? []).map((entry) => entry.name));
+  return open.map((entry) => {
+    const result = results.get(entry.name) as PackageResult;
+    const ok = result.ok && (!left.has(entry.name) || Boolean(result.reason));
+    const reason = ok ? result.reason || 'Chocolatey update' : result.reason || NO_CHANGE;
+    tracker.finish('choco', entry.name, ok, reason);
+    return packageItem('choco', entry.name, entry.installed, entry.available, ok ? 'applied' : 'failed', reason, ok ? undefined : result.detail);
   });
 }
 
@@ -386,17 +448,23 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
 
   let brew: Awaited<ReturnType<typeof listBrew>> = null;
   let winget: WingetPackage[] = [];
+  let choco: Awaited<ReturnType<typeof listChoco>> = null;
   try {
     if (deps.platform === 'darwin' || deps.platform === 'linux') brew = await listBrew(deps, settings, apply);
-    if (deps.platform === 'win32') winget = await listWinget(deps, settings);
+    if (deps.platform === 'win32') {
+      choco = await listChoco(deps, settings);
+      winget = await listWinget(deps, settings);
+    }
   } catch (error) {
     notes.push(`Packages: ${(error as Error).message}`);
   }
   for (const entry of brew?.held ?? []) items.push(packageItem('brew', entry.name, entry.installed, entry.available, 'waiting', 'on hold list'));
+  for (const entry of choco?.held ?? []) items.push(packageItem('choco', entry.name, entry.installed, entry.available, 'waiting', entry.pinned ? 'pinned in Chocolatey' : 'on hold list'));
 
   if (!apply) {
     for (const plan of auto) items.push({ source: 'docker', name: plan.containers[0].name, from: plan.from, to: plan.to, outcome: 'planned', reason: plan.decision.reason });
     for (const entry of brew?.open ?? []) items.push(packageItem('brew', entry.name, entry.installed, entry.available, 'planned', 'Homebrew update'));
+    for (const entry of choco?.open ?? []) items.push(packageItem('choco', entry.name, entry.installed, entry.available, 'planned', 'Chocolatey update'));
     for (const entry of winget) items.push(packageItem('winget', entry.name, entry.installed, entry.available, 'planned', 'winget update'));
     return { startedAt, finishedAt: deps.now().toISOString(), mode, status: summarize(items), items, notes };
   }
@@ -404,6 +472,7 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
   tracker.plan([
     ...auto.map((plan) => ({ source: 'docker' as const, name: plan.containers[0].name, from: plan.from, to: plan.to })),
     ...(brew?.open ?? []).map((entry) => ({ source: 'brew' as const, name: entry.name, from: entry.installed, to: entry.available })),
+    ...(choco?.open ?? []).map((entry) => ({ source: 'choco' as const, name: entry.name, from: entry.installed, to: entry.available })),
     ...winget.map((entry) => ({ source: 'winget' as const, name: entry.name, from: entry.installed, to: entry.available })),
   ]);
 
@@ -421,6 +490,7 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
 
   try {
     if (brew) items.push(...(await applyBrew(deps, tracker, brew.open, notes)));
+    if (choco) items.push(...(await applyChoco(deps, tracker, choco.open, settings)));
     if (winget.length > 0) items.push(...(await applyWinget(deps, tracker, winget, settings)));
   } catch (error) {
     notes.push(`Packages: ${(error as Error).message}`);

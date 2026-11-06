@@ -1,5 +1,5 @@
 export type Outcome = 'planned' | 'applied' | 'waiting' | 'rolled-back' | 'failed';
-export type ItemSource = 'docker' | 'brew' | 'winget';
+export type ItemSource = 'docker' | 'brew' | 'winget' | 'choco';
 
 export interface ReportItem {
   source: ItemSource;
@@ -8,6 +8,8 @@ export interface ReportItem {
   to: string;
   outcome: Outcome;
   reason: string;
+  // The tool's own last lines, for failures only.
+  detail?: string;
 }
 
 export interface Report {

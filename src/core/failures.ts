@@ -91,3 +91,21 @@ const BREW: Array<[RegExp, Diagnosis]> = [
 export function diagnoseBrew(output: string): Diagnosis {
   return BREW.find(([pattern]) => pattern.test(output))?.[1] ?? { reason: UNKNOWN };
 }
+
+const ELEVATION_CANCELLED = /canceled by the user|cancelled by the user|vom Benutzer abgebrochen/i;
+
+// Scoop prints its messages in English only.
+export function diagnoseScoop(output: string): Diagnosis {
+  if (ELEVATION_CANCELLED.test(output)) return { reason: 'the admin prompt was cancelled' };
+  if (/is already installed|Latest versions for all apps are installed|is up to date/i.test(output)) return { reason: 'already up to date', applied: true };
+  if (/Couldn't find manifest|isn't installed|is not installed/i.test(output)) return { reason: 'Scoop does not know this app' };
+  if (/is still running|access is denied|being used by another process/i.test(output)) return { reason: 'app is running, close it', fix: 'wait-retry' };
+  if (/hash check failed/i.test(output)) return { reason: 'download did not match its checksum', fix: 'retry' };
+  return { reason: 'Scoop stopped with an error' };
+}
+
+// Chocolatey changes run through the Windows admin prompt.
+export function diagnoseElevated(code: number, output: string): Diagnosis {
+  if (ELEVATION_CANCELLED.test(output)) return { reason: 'the admin prompt was cancelled' };
+  return diagnoseChoco(code, output);
+}

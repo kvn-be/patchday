@@ -2,11 +2,11 @@ import { parseOutdated, restartsDocker, upgradeArgs, upgradeOrder, type Outdated
 import { bumpImage } from '../core/compose.ts';
 import { parseInspect, type ContainerInfo } from '../core/docker.ts';
 import { parseChocoOutdated, type ChocoPackage } from '../core/choco.ts';
-import { diagnoseBrew, diagnoseChoco, diagnoseWinget, type Diagnosis } from '../core/failures.ts';
+import { diagnoseBrew, diagnoseChoco, diagnoseScoop, diagnoseWinget, type Diagnosis } from '../core/failures.ts';
 import { decide, type Decision } from '../core/policy.ts';
 import { latestTag } from '../core/version.ts';
 import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
-import { WINGET_FLAGS, wingetTarget } from '../core/packages.ts';
+import { isSkipped, parseScoopStatus, scoopCommand, WINGET_FLAGS, wingetTarget } from '../core/packages.ts';
 import type { PortainerClient, PortainerStack } from './portainer.ts';
 import type { Exec, ExecResult, ItemSource, Phase, ProgressItem, Report, ReportItem, Settings } from './types.ts';
 
@@ -37,7 +37,7 @@ interface ImagePlan {
 const HEALTH_LIMIT_MS = 5 * 60_000;
 const HEALTH_POLL_MS = 10_000;
 const RETRY_WAIT_MS = 60_000;
-const BREW_ENV = { HOMEBREW_NO_ENV_HINTS: '1', HOMEBREW_NO_AUTO_UPDATE: '1', NONINTERACTIVE: '1' };
+export const BREW_ENV = { HOMEBREW_NO_ENV_HINTS: '1', HOMEBREW_NO_AUTO_UPDATE: '1', NONINTERACTIVE: '1' };
 
 interface Tracker {
   plan(items: Pick<ProgressItem, 'source' | 'name' | 'from' | 'to'>[]): void;
@@ -256,7 +256,7 @@ function packageItem(source: ItemSource, name: string, from: string, to: string,
   return { source, name, from, to, outcome, reason, ...(detail ? { detail } : {}) };
 }
 
-function lastLines(result: ExecResult): string {
+export function lastLines(result: ExecResult): string {
   const lines = `${result.stdout}\n${result.stderr}`.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !/^[-\\|/ ]+$/.test(line));
   return lines.slice(-12).join('\n').slice(0, 1500);
 }
@@ -307,7 +307,7 @@ async function listBrew(deps: Deps, settings: Settings, apply: boolean): Promise
   if ((await deps.exec('brew', ['--version'])).code !== 0) return null;
   if (apply) await deps.exec('brew', ['update'], { timeoutMs: 10 * 60_000, env: BREW_ENV });
   const isHeld = (entry: OutdatedPackage) => entry.name === 'patchday' || settings.holds.includes(entry.name);
-  const outdated = await outdatedBrew(deps);
+  const outdated = (await outdatedBrew(deps)).filter((entry) => !isSkipped(settings.skipped, { manager: 'brew', id: entry.name }, entry.available));
   return { open: upgradeOrder(outdated.filter((entry) => !isHeld(entry))), held: outdated.filter(isHeld) };
 }
 
@@ -341,7 +341,10 @@ async function applyBrew(deps: Deps, tracker: Tracker, open: OutdatedPackage[], 
 
 async function listWinget(deps: Deps, settings: Settings): Promise<WingetPackage[]> {
   const result = await deps.exec('winget', ['upgrade', ...WINGET_FLAGS], { timeoutMs: 5 * 60_000 });
-  return parseWingetUpgrade(result.stdout).filter((entry) => !settings.holds.includes(entry.id) && !settings.holds.includes(entry.name) && entry.id !== 'kvn-be.Patchday');
+  return parseWingetUpgrade(result.stdout).filter(
+    (entry) => !settings.holds.includes(entry.id) && !settings.holds.includes(entry.name) && entry.id !== 'kvn-be.Patchday'
+      && !isSkipped(settings.skipped, { manager: 'winget', id: entry.id }, entry.available),
+  );
 }
 
 
@@ -384,7 +387,7 @@ async function applyWinget(deps: Deps, tracker: Tracker, open: WingetPackage[], 
 async function listChoco(deps: Deps, settings: Settings): Promise<{ open: ChocoPackage[]; held: ChocoPackage[] } | null> {
   if ((await deps.exec('choco', ['--version'])).code !== 0) return null;
   const result = await deps.exec('choco', ['outdated', '--limit-output'], { timeoutMs: 10 * 60_000 });
-  const outdated = parseChocoOutdated(result.stdout);
+  const outdated = parseChocoOutdated(result.stdout).filter((entry) => !isSkipped(settings.skipped, { manager: 'choco', id: entry.name }, entry.available));
   const isHeld = (entry: ChocoPackage) => entry.pinned || settings.holds.includes(entry.name);
   return { open: outdated.filter((entry) => !isHeld(entry)), held: outdated.filter(isHeld) };
 }
@@ -406,6 +409,42 @@ async function applyChoco(deps: Deps, tracker: Tracker, open: ChocoPackage[], se
     const reason = ok ? result.reason || 'Chocolatey update' : result.reason || NO_CHANGE;
     tracker.finish('choco', entry.name, ok, reason);
     return packageItem('choco', entry.name, entry.installed, entry.available, ok ? 'applied' : 'failed', reason, ok ? undefined : result.detail);
+  });
+}
+
+interface ScoopUpdate { id: string; installed: string; available: string }
+
+function scoop(deps: Deps, args: string[], timeoutMs = 5 * 60_000): Promise<ExecResult> {
+  const command = scoopCommand(args);
+  return deps.exec(command.command, command.args, { timeoutMs });
+}
+
+async function listScoop(deps: Deps, settings: Settings, apply: boolean): Promise<{ open: ScoopUpdate[]; held: ScoopUpdate[] } | null> {
+  if ((await scoop(deps, ['--version'], 60_000)).code !== 0) return null;
+  // Refreshes the buckets, like brew update. Previews only read what is already known.
+  if (apply) await scoop(deps, ['update'], 10 * 60_000);
+  const outdated = parseScoopStatus((await scoop(deps, ['status'])).stdout).filter((entry) => !isSkipped(settings.skipped, { manager: 'scoop', id: entry.id }, entry.available));
+  const isHeld = (entry: ScoopUpdate) => settings.holds.includes(entry.id);
+  return { open: outdated.filter((entry) => !isHeld(entry)), held: outdated.filter(isHeld) };
+}
+
+async function applyScoop(deps: Deps, tracker: Tracker, open: ScoopUpdate[]): Promise<ReportItem[]> {
+  const results = new Map<string, PackageResult>();
+  for (const entry of open) {
+    const result = await installWithRepair(deps, tracker, 'scoop', entry.id, {
+      install: () => scoop(deps, ['update', entry.id], 30 * 60_000),
+      diagnose: (failed) => diagnoseScoop(`${failed.stdout}\n${failed.stderr}`),
+      refresh: async () => {},
+    });
+    results.set(entry.id, result);
+  }
+  const left = new Set(parseScoopStatus((await scoop(deps, ['status'])).stdout).map((entry) => entry.id));
+  return open.map((entry) => {
+    const result = results.get(entry.id) as PackageResult;
+    const ok = result.ok && (!left.has(entry.id) || Boolean(result.reason));
+    const reason = ok ? result.reason || 'Scoop update' : result.reason || NO_CHANGE;
+    tracker.finish('scoop', entry.id, ok, reason);
+    return packageItem('scoop', entry.id, entry.installed, entry.available, ok ? 'applied' : 'failed', reason, ok ? undefined : result.detail);
   });
 }
 
@@ -444,23 +483,27 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
   let brew: Awaited<ReturnType<typeof listBrew>> = null;
   let winget: WingetPackage[] = [];
   let choco: Awaited<ReturnType<typeof listChoco>> = null;
+  let scoopApps: Awaited<ReturnType<typeof listScoop>> = null;
   try {
     if (deps.platform === 'darwin' || deps.platform === 'linux') brew = await listBrew(deps, settings, apply);
     if (deps.platform === 'win32') {
       choco = await listChoco(deps, settings);
       winget = await listWinget(deps, settings);
+      scoopApps = await listScoop(deps, settings, apply);
     }
   } catch (error) {
     notes.push(`Packages: ${(error as Error).message}`);
   }
   for (const entry of brew?.held ?? []) items.push(packageItem('brew', entry.name, entry.installed, entry.available, 'waiting', 'on hold list'));
   for (const entry of choco?.held ?? []) items.push(packageItem('choco', entry.name, entry.installed, entry.available, 'waiting', entry.pinned ? 'pinned in Chocolatey' : 'on hold list'));
+  for (const entry of scoopApps?.held ?? []) items.push(packageItem('scoop', entry.id, entry.installed, entry.available, 'waiting', 'on hold list'));
 
   if (!apply) {
     for (const plan of auto) items.push({ source: 'docker', name: plan.containers[0].name, from: plan.from, to: plan.to, outcome: 'planned', reason: plan.decision.reason });
     for (const entry of brew?.open ?? []) items.push(packageItem('brew', entry.name, entry.installed, entry.available, 'planned', 'Homebrew update'));
     for (const entry of choco?.open ?? []) items.push(packageItem('choco', entry.name, entry.installed, entry.available, 'planned', 'Chocolatey update'));
     for (const entry of winget) items.push(packageItem('winget', entry.name, entry.installed, entry.available, 'planned', 'winget update'));
+    for (const entry of scoopApps?.open ?? []) items.push(packageItem('scoop', entry.id, entry.installed, entry.available, 'planned', 'Scoop update'));
     return { startedAt, finishedAt: deps.now().toISOString(), mode, status: summarize(items), items, notes };
   }
 
@@ -469,6 +512,7 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
     ...(brew?.open ?? []).map((entry) => ({ source: 'brew' as const, name: entry.name, from: entry.installed, to: entry.available })),
     ...(choco?.open ?? []).map((entry) => ({ source: 'choco' as const, name: entry.name, from: entry.installed, to: entry.available })),
     ...winget.map((entry) => ({ source: 'winget' as const, name: entry.name, from: entry.installed, to: entry.available })),
+    ...(scoopApps?.open ?? []).map((entry) => ({ source: 'scoop' as const, name: entry.id, from: entry.installed, to: entry.available })),
   ]);
 
   try {
@@ -487,6 +531,7 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
     if (brew) items.push(...(await applyBrew(deps, tracker, brew.open, notes)));
     if (choco) items.push(...(await applyChoco(deps, tracker, choco.open, settings)));
     if (winget.length > 0) items.push(...(await applyWinget(deps, tracker, winget, settings)));
+    if (scoopApps && scoopApps.open.length > 0) items.push(...(await applyScoop(deps, tracker, scoopApps.open)));
   } catch (error) {
     notes.push(`Packages: ${(error as Error).message}`);
   }

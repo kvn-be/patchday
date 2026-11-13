@@ -77,7 +77,7 @@ Optional, Mac only: repeat with the stack deployed through Portainer instead of 
 - [ ] After a run, backup folders older than 30 days are removed, the 10 newest stay, and folders you created by hand are untouched.
 - [ ] With an older version installed, **Update Patchday** appears and installs the latest release. The app restarts on the new version.
 - [ ] Automatic update: install the previous release, start it, and wait a minute. The note `Patchday <version> is downloaded` appears. Close Patchday: the next start shows the new version, and **History** lists `Patchday updated`.
-- [ ] Turn off **Update Patchday automatically** in **Settings**, set `lastSelfCheck` in `settings.json` to an old date, and restart. Nothing is downloaded.
+- [ ] Turn off **Update Patchday automatically** on the **Schedule** page, set `lastSelfCheck` in `settings.json` to an old date, and restart. Nothing is downloaded.
 
 ## 7. Navigation, packages and history
 

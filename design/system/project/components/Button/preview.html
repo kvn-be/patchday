@@ -1,14 +1,19 @@
-<!-- @dsCard group="Actions" height=84 width=760 -->
+<!-- @dsCard group="Actions" height=140 -->
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Button</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Instrument+Sans:wght@400..600&display=swap"></head>
 <body>
-<div class="pd-row">
-  <button class="pd-btn pd-btn-main" type="button">Check now</button>
-  <button class="pd-btn pd-btn-line" type="button">Later</button>
-  <a class="pd-btn pd-btn-coffee" href="https://ko-fi.com/kvnbe" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3.5v2M12.5 3.5v2"/></svg>Buy me a coffee</a>
-  <button class="pd-btn pd-btn-icon" type="button" aria-label="Switch to light theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" stroke-linejoin="round"/></svg></button>
-  <button class="pd-btn pd-btn-line" type="button" disabled>Running</button>
+<div style="position:relative;min-height:140px;padding:24px;box-sizing:border-box">
+<div style="position:absolute;inset:0;overflow:hidden;pointer-events:none"><i class="pd-blob pd-blob-1" style="left:-80px;top:40px;width:300px;height:260px;filter:blur(60px)"></i><i class="pd-blob pd-blob-2" style="left:240px;top:-80px;width:280px;height:220px;filter:blur(60px)"></i><i class="pd-blob pd-blob-3" style="left:520px;top:60px;width:260px;height:220px;filter:blur(60px)"></i></div>
+<div style="position:relative">
+<div class="pd-glass" style="border-radius:var(--radius-panel);padding:20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+  <button class="pd-btn pd-btn-main" type="button">Update all</button>
+  <button class="pd-btn pd-btn-line" type="button">Check now</button>
+  <button class="pd-btn pd-btn-coffee" type="button">Coffee</button>
+  <button class="pd-btn pd-btn-line pd-btn-small" type="button">Skip</button>
+  <button class="pd-link" type="button">See the report</button>
+</div>
+</div>
 </div>
 </body>
 </html>

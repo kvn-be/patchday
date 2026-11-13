@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Patchday","components":[{"name":"AppHeader"},{"name":"Badge"},{"name":"Button"},{"name":"CommandField"},{"name":"LanguageSwitch"},{"name":"ProgressBar"},{"name":"ReportWindow"},{"name":"WeekDial"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Patchday","components":[{"name":"Button"},{"name":"Glass"},{"name":"Ground"},{"name":"ListRow"},{"name":"Pill"},{"name":"ProgressBar"},{"name":"Segmented"},{"name":"Sidebar"},{"name":"Switch"},{"name":"WeekDial"}]} */
 (function () {
   // Components are plain CSS classes from bundle.css. Only the dial needs a script.
   function mountWeekDial(dial, slider, options) {
@@ -50,5 +50,18 @@
   paint(hour0);
   return { paint: paint };
   }
-  window.Patchday = { mountWeekDial: mountWeekDial };
+  // The colored ground drifts against the pointer; glass above it stays still. Nothing follows the pointer itself.
+  function startParallax(root) {
+    var target = root || document.documentElement;
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return function () {};
+    var frame = 0, x = 0, y = 0;
+    function apply() { frame = 0; target.style.setProperty('--px', x.toFixed(3)); target.style.setProperty('--py', y.toFixed(3)); }
+    function queue() { if (!frame) frame = requestAnimationFrame(apply); }
+    function move(event) { x = (event.clientX / window.innerWidth) * 2 - 1; y = (event.clientY / window.innerHeight) * 2 - 1; queue(); }
+    function rest() { x = 0; y = 0; queue(); }
+    window.addEventListener('pointermove', move);
+    document.documentElement.addEventListener('pointerleave', rest);
+    return function stop() { window.removeEventListener('pointermove', move); document.documentElement.removeEventListener('pointerleave', rest); rest(); };
+  }
+  window.Patchday = { mountWeekDial: mountWeekDial, startParallax: startParallax };
 })();

@@ -8,134 +8,134 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<div class="ground" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i><i class="blob b4"></i></div>
+<div class="pd-ground" aria-hidden="true"><i class="pd-blob pd-blob-1"></i><i class="pd-blob pd-blob-2"></i><i class="pd-blob pd-blob-3"></i><i class="pd-blob pd-blob-4"></i></div>
 
 <div class="shell">
-  <nav class="sidebar glass" aria-label="Main">
-    <div class="brand">
+  <nav class="pd-sidebar pd-glass" aria-label="Main">
+    <div class="pd-brand">
       <svg viewBox="0 0 34 34" aria-hidden="true"><circle cx="17" cy="17" r="15.5" fill="none" stroke="var(--brass)" stroke-width="1.6"/><circle cx="17" cy="17" r="11" fill="rgba(255,255,255,.8)"/><path d="M17 17 9.6 10.6" stroke="var(--brass)" stroke-width="2" stroke-linecap="round"/><circle cx="17" cy="17" r="2.2" fill="var(--brass)"/></svg>
       <b>Patchday</b>
     </div>
-    <button class="nav" type="button" data-page="overview">
+    <button class="pd-nav" type="button" data-page="overview">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg>
       <span data-i18n="navOverview"></span>
     </button>
-    <button class="nav" type="button" data-page="updates">
+    <button class="pd-nav" type="button" data-page="updates">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 16V8M8.5 11.5 12 8l3.5 3.5"/></svg>
       <span data-i18n="navUpdates"></span>
-      <span class="count" id="nav-count" hidden></span>
+      <span class="pd-count" id="nav-count" hidden></span>
     </button>
-    <button class="nav" type="button" data-page="packages">
+    <button class="pd-nav" type="button" data-page="packages">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>
       <span data-i18n="navPackages"></span>
     </button>
-    <button class="nav" type="button" data-page="schedule">
+    <button class="pd-nav" type="button" data-page="schedule">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l-3.5 2.5"/></svg>
       <span data-i18n="navSchedule"></span>
     </button>
-    <button class="nav" type="button" data-page="history">
+    <button class="pd-nav" type="button" data-page="history">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.6"/><path d="M4 4v4.6h4.6M12 8v4l3 2"/></svg>
       <span data-i18n="navHistory"></span>
     </button>
 
     <div class="sidebar-foot">
-      <button class="nav" type="button" id="settings-open">
+      <button class="pd-nav" type="button" id="settings-open">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4.9a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.5a7 7 0 0 0-2 1.2l-2.4-.9-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-.9a7 7 0 0 0 2 1.2L10 21h4l.5-2.5a7 7 0 0 0 2-1.2l2.4.9 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg>
         <span data-i18n="settings"></span>
       </button>
       <div class="foot-row">
-        <div class="segmented small" role="group" aria-label="Language / Sprache">
+        <div class="pd-segmented pd-segmented-small" role="group" aria-label="Language / Sprache">
           <button type="button" data-lang="en" aria-pressed="true">EN</button>
           <button type="button" data-lang="de" aria-pressed="false">DE</button>
         </div>
-        <button class="btn btn-coffee btn-small" id="coffee" type="button" data-i18n="coffeeShort"></button>
+        <button class="pd-btn pd-btn-coffee pd-btn-small" id="coffee" type="button" data-i18n="coffeeShort"></button>
       </div>
       <div class="self-line">
         <span id="version"></span>
-        <button class="link" id="self-update-button" type="button" data-i18n="selfInstall"></button>
+        <button class="pd-link" id="self-update-button" type="button" data-i18n="selfInstall"></button>
       </div>
     </div>
   </nav>
 
   <main class="pages">
     <section class="page" id="page-overview" aria-labelledby="overview-title">
-      <header class="page-head">
+      <header class="pd-page-head">
         <div><h1 id="overview-title" data-i18n="navOverview"></h1><p data-i18n="overviewLead"></p></div>
-        <button class="btn btn-line" type="button" data-action="check" data-i18n="check"></button>
-        <button class="btn btn-main" type="button" data-action="update" data-i18n="updateAll"></button>
+        <button class="pd-btn pd-btn-line" type="button" data-action="check" data-i18n="check"></button>
+        <button class="pd-btn pd-btn-main" type="button" data-action="update" data-i18n="updateAll"></button>
       </header>
-      <div class="self-update glass" id="self-update" role="status" hidden>
+      <div class="self-update pd-glass" id="self-update" role="status" hidden>
         <p id="self-text"></p>
         <div class="pd-progress" id="self-bar" role="progressbar" hidden><span></span></div>
-        <div><button class="btn btn-line btn-small" id="self-restart" type="button" data-i18n="selfRestart" hidden></button></div>
+        <div><button class="pd-btn pd-btn-line pd-btn-small" id="self-restart" type="button" data-i18n="selfRestart" hidden></button></div>
       </div>
-      <section class="hero glass" aria-live="polite">
+      <section class="hero pd-glass" aria-live="polite">
         <div class="hero-text">
-          <span class="pill pill-wait" id="hero-when"></span>
+          <span class="pd-pill pd-pill-wait" id="hero-when"></span>
           <h2 id="hero-title"></h2>
           <p id="hero-text"></p>
           <div class="row">
-            <button class="btn btn-main" type="button" data-action="update" id="hero-update" data-i18n="update"></button>
-            <button class="btn btn-line" type="button" data-goto="updates" data-i18n="reviewUpdates"></button>
+            <button class="pd-btn pd-btn-main" type="button" data-action="update" id="hero-update" data-i18n="update"></button>
+            <button class="pd-btn pd-btn-line" type="button" data-goto="updates" data-i18n="reviewUpdates"></button>
           </div>
         </div>
         <div class="mini-dial" aria-hidden="true"><div class="ticks"></div><i class="hand" id="mini-hand"></i><div class="face"><span id="mini-day"></span><b id="mini-time"></b></div></div>
       </section>
       <div class="cards">
-        <section class="card glass">
+        <section class="card pd-glass">
           <h3 data-i18n="nextRunTitle"></h3>
           <p class="big" id="card-next"></p>
-          <label class="switch-row"><button class="switch" type="button" role="switch" id="enabled-quick" aria-checked="false"><span></span></button><span data-i18n="enabled"></span></label>
-          <button class="link" type="button" data-goto="schedule" data-i18n="changeTime"></button>
+          <label class="switch-row"><button class="pd-switch" type="button" role="switch" id="enabled-quick" aria-checked="false"><span></span></button><span data-i18n="enabled"></span></label>
+          <button class="pd-link" type="button" data-goto="schedule" data-i18n="changeTime"></button>
         </section>
-        <section class="card glass">
+        <section class="card pd-glass">
           <h3 data-i18n="lastRun"></h3>
           <p class="big" id="card-last"></p>
           <div class="pills" id="card-last-pills"></div>
-          <button class="link" type="button" data-goto="updates" data-i18n="seeReport"></button>
+          <button class="pd-link" type="button" data-goto="updates" data-i18n="seeReport"></button>
         </section>
-        <section class="card glass">
+        <section class="card pd-glass">
           <h3 data-i18n="waitsForYou"></h3>
           <p class="big" id="card-wait"></p>
           <p class="muted" id="card-wait-text"></p>
-          <button class="link" type="button" data-goto="updates" data-i18n="seeAll"></button>
+          <button class="pd-link" type="button" data-goto="updates" data-i18n="seeAll"></button>
         </section>
       </div>
     </section>
 
     <section class="page" id="page-updates" aria-labelledby="updates-title" hidden>
-      <header class="page-head">
+      <header class="pd-page-head">
         <div><h1 id="updates-title" data-i18n="navUpdates"></h1><p id="updates-lead"></p></div>
-        <button class="btn btn-line" type="button" data-action="check" data-i18n="check"></button>
-        <button class="btn btn-main" type="button" data-action="update" data-i18n="updateAll"></button>
+        <button class="pd-btn pd-btn-line" type="button" data-action="check" data-i18n="check"></button>
+        <button class="pd-btn pd-btn-main" type="button" data-action="update" data-i18n="updateAll"></button>
       </header>
       <p class="muted progress" id="progress" role="status"></p>
-      <div class="panel glass" id="report"></div>
+      <div class="panel pd-glass" id="report"></div>
     </section>
 
     <section class="page" id="page-packages" aria-labelledby="packages-title" hidden></section>
 
     <section class="page" id="page-schedule" aria-labelledby="schedule-title" hidden>
-      <header class="page-head">
+      <header class="pd-page-head">
         <div><h1 id="schedule-title" data-i18n="navSchedule"></h1><p data-i18n="scheduleLead"></p></div>
-        <button class="btn btn-main" type="button" data-action="update" data-i18n="runNow"></button>
+        <button class="pd-btn pd-btn-main" type="button" data-action="update" data-i18n="runNow"></button>
       </header>
       <div class="schedule-grid">
-        <section class="glass dial-card">
+        <section class="pd-glass dial-card">
           <div id="dial-slot"></div>
           <p class="note" id="hint" aria-live="polite"></p>
           <p class="muted" id="next"></p>
         </section>
-        <section class="glass settings-card">
+        <section class="pd-glass settings-card">
           <h2 data-i18n="whatHappens"></h2>
-          <div class="set"><span data-i18n="enabled"></span><button class="switch" type="button" role="switch" id="enabled" aria-checked="false"><span></span></button><small data-i18n="enabledHint"></small></div>
-          <div class="set"><span data-i18n="applyLabel"></span><button class="switch" type="button" role="switch" id="apply" aria-checked="false"><span></span></button><small data-i18n="applyHint"></small></div>
-          <div class="set"><span data-i18n="minorLabel"></span><button class="switch" type="button" role="switch" id="minor" aria-checked="false"><span></span></button><small data-i18n="minorHint"></small></div>
-          <div class="set"><span data-i18n="autoSelfLabel"></span><button class="switch" type="button" role="switch" id="auto-self" aria-checked="false"><span></span></button><small data-i18n="autoSelfHint"></small></div>
+          <div class="set"><span data-i18n="enabled"></span><button class="pd-switch" type="button" role="switch" id="enabled" aria-checked="false"><span></span></button><small data-i18n="enabledHint"></small></div>
+          <div class="set"><span data-i18n="applyLabel"></span><button class="pd-switch" type="button" role="switch" id="apply" aria-checked="false"><span></span></button><small data-i18n="applyHint"></small></div>
+          <div class="set"><span data-i18n="minorLabel"></span><button class="pd-switch" type="button" role="switch" id="minor" aria-checked="false"><span></span></button><small data-i18n="minorHint"></small></div>
+          <div class="set"><span data-i18n="autoSelfLabel"></span><button class="pd-switch" type="button" role="switch" id="auto-self" aria-checked="false"><span></span></button><small data-i18n="autoSelfHint"></small></div>
           <div class="set set-wide">
             <span data-i18n="neverUpdate"></span>
             <div class="chips" id="holds"></div>
-            <form class="chip-add" id="hold-form"><label class="sr-only" for="hold-input" data-i18n="neverUpdateAdd"></label><input id="hold-input" type="text" autocomplete="off" spellcheck="false"><button class="btn btn-line btn-small" type="submit" data-i18n="add"></button></form>
+            <form class="chip-add" id="hold-form"><label class="sr-only" for="hold-input" data-i18n="neverUpdateAdd"></label><input id="hold-input" type="text" autocomplete="off" spellcheck="false"><button class="pd-btn pd-btn-line pd-btn-small" type="submit" data-i18n="add"></button></form>
           </div>
         </section>
       </div>
@@ -148,37 +148,37 @@
 <dialog id="settings">
   <h2 data-i18n="settings"></h2>
   <div class="settings-body">
-    <div class="admin-row" id="admin-row" hidden><p class="muted" id="admin-state"></p><button class="btn btn-line btn-small" id="admin-setup" type="button" data-i18n="adminAllow"></button></div>
-    <label class="field"><span data-i18n="portainerUrl"></span><input id="portainer-url" type="url" placeholder="https://127.0.0.1:9443" autocomplete="off" spellcheck="false"></label>
-    <label class="field"><span data-i18n="portainerToken"></span><input id="portainer-token" type="password" autocomplete="off"></label>
+    <div class="admin-row" id="admin-row" hidden><p class="muted" id="admin-state"></p><button class="pd-btn pd-btn-line pd-btn-small" id="admin-setup" type="button" data-i18n="adminAllow"></button></div>
+    <label class="pd-field"><span data-i18n="portainerUrl"></span><input id="portainer-url" type="url" placeholder="https://127.0.0.1:9443" autocomplete="off" spellcheck="false"></label>
+    <label class="pd-field"><span data-i18n="portainerToken"></span><input id="portainer-token" type="password" autocomplete="off"></label>
     <p class="muted" id="token-state"></p>
-    <div><button class="btn btn-line btn-small" id="save-token" type="button" data-i18n="saveToken"></button></div>
+    <div><button class="pd-btn pd-btn-line pd-btn-small" id="save-token" type="button" data-i18n="saveToken"></button></div>
   </div>
-  <div class="row"><button class="btn btn-main" id="settings-close" type="button" data-i18n="done"></button></div>
+  <div class="row"><button class="pd-btn pd-btn-main" id="settings-close" type="button" data-i18n="done"></button></div>
 </dialog>
 
 <dialog id="confirm">
   <h2 data-i18n="confirmTitle"></h2>
   <p data-i18n="confirmText"></p>
   <div class="row">
-    <button class="btn btn-main" id="confirm-yes" type="button" data-i18n="confirmYes"></button>
-    <button class="btn btn-line" id="confirm-no" type="button" data-i18n="cancel"></button>
+    <button class="pd-btn pd-btn-main" id="confirm-yes" type="button" data-i18n="confirmYes"></button>
+    <button class="pd-btn pd-btn-line" id="confirm-no" type="button" data-i18n="cancel"></button>
   </div>
 </dialog>
 <dialog id="ask">
   <h2 id="ask-title"></h2>
   <p id="ask-text"></p>
   <div class="row">
-    <button class="btn btn-main" id="ask-yes" type="button"></button>
-    <button class="btn btn-line" id="ask-no" type="button" data-i18n="cancel"></button>
+    <button class="pd-btn pd-btn-main" id="ask-yes" type="button"></button>
+    <button class="pd-btn pd-btn-line" id="ask-no" type="button" data-i18n="cancel"></button>
   </div>
 </dialog>
 <dialog id="admin">
   <h2 data-i18n="adminTitle"></h2>
   <p data-i18n="adminText"></p>
   <div class="row">
-    <button class="btn btn-main" id="admin-yes" type="button" data-i18n="adminAllow"></button>
-    <button class="btn btn-line" id="admin-no" type="button" data-i18n="notNow"></button>
+    <button class="pd-btn pd-btn-main" id="admin-yes" type="button" data-i18n="adminAllow"></button>
+    <button class="pd-btn pd-btn-line" id="admin-no" type="button" data-i18n="notNow"></button>
   </div>
 </dialog>
 <script src="bundle.js"></script>

@@ -3,19 +3,20 @@ import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 
 const tokens = JSON.parse(await readFile('design/system/project/tokens.json', 'utf8'));
 const block = (selector, lines) => `${selector} {\n${lines.map((line) => `  ${line}`).join('\n')}\n}\n`;
+const pick = (value, theme) => (typeof value === 'string' ? value : value[theme] ?? Object.values(value)[0]);
 const themed = (theme) => [
-  ...tokens.color.tokens.map((token) => `--${token.name}: ${token.value[theme]};`),
-  ...tokens.shadow.tokens.map((token) => `--${token.name}: ${token.value[theme]};`),
+  ...tokens.color.tokens.map((token) => `--${token.name}: ${pick(token.value, theme)};`),
+  ...tokens.shadow.tokens.map((token) => `--${token.name}: ${pick(token.value, theme)};`),
 ];
 const shared = [
   ...['spacing', 'radius', 'fluid'].flatMap((family) => tokens[family].tokens.map((token) => `--${token.name}: ${token.value};`)),
   ...Object.entries(tokens.type.families).map(([key, stack]) => `--font-${key}: ${stack};`),
 ];
+// One theme: Liquid Glass. A token without a value for it falls back to its first value.
+const theme = tokens.color.themes[0].id;
 const css = [
   '/* Generated from design/system/project/tokens.json */',
-  block(':root, [data-theme="dark"]', ['color-scheme: dark;', ...themed('dark')]),
-  block('[data-theme="light"]', ['color-scheme: light;', ...themed('light')]),
-  block(':root', shared),
+  block(':root', ['color-scheme: light;', ...themed(theme), ...shared]),
 ].join('\n');
 await writeFile('src/renderer/tokens.css', css);
 

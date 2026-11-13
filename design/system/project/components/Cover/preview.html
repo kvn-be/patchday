@@ -3,35 +3,47 @@
 <html lang="en">
 <head><meta charset="utf-8"><title>Cover</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Instrument+Sans:wght@400..600&display=swap">
 <style>
-  html, body { margin: 0; background: var(--night); }
+  html, body { margin: 0; background: var(--ground); }
   .cover { position: relative; width: 960px; height: 300px; overflow: hidden; }
-  .cover svg { position: absolute; inset: 0; }
-  .b-brass { fill: var(--brass); } .b-raised { fill: var(--control-line); } .b-wait { fill: var(--wait); } .b-moon { fill: var(--moon); }
-  .ring { fill: none; stroke: var(--night); stroke-width: 2; }
-  .tick { stroke: var(--night); stroke-width: 2.5; }
-  .hand { stroke: var(--night); stroke-width: 5; stroke-linecap: round; }
-  .pin { fill: var(--night); }
-  .text { position: absolute; left: 40px; bottom: 36px; width: 440px; }
-  .name { font: 400 96px/.92 var(--font-display); letter-spacing: -.02em; color: var(--moon); }
-  .tag { margin-top: 12px; font: 400 14px/1.4 var(--font-text); color: var(--haze); }
+  .shape { position: absolute; border-radius: 50%; }
+  .s1 { left: 420px; top: 40px; width: 360px; height: 320px; background: var(--shape-periwinkle); filter: blur(60px); }
+  .s2 { left: 660px; top: -120px; width: 340px; height: 280px; background: var(--shape-sky); filter: blur(60px); }
+  .s3 { left: 760px; top: 170px; width: 280px; height: 220px; background: var(--shape-sand); filter: blur(60px); }
+  .pane { position: absolute; left: 560px; top: 36px; width: 300px; height: 228px; border-radius: 28px; }
+  .dial { position: absolute; left: 610px; top: 50px; }
+  .ring { fill: rgba(255, 255, 255, .55); stroke: #ffffff; stroke-width: 1.5; }
+  .tick { stroke: var(--ink); stroke-opacity: .35; stroke-width: 2; }
+  .hand { stroke: var(--brass); stroke-width: 4; stroke-linecap: round; }
+  .pin { fill: var(--brass); }
+  .text { position: absolute; left: 40px; bottom: 40px; width: 460px; }
+  .name { font: 400 96px/.92 var(--font-display); letter-spacing: -.02em; color: var(--ink); }
+  .tag { margin-top: 14px; font: 400 15px/1.4 var(--font-text); color: var(--ink-2); }
 </style></head>
 <body>
 <div class="cover">
-  <!-- blocks: brass 280x188, wait 160x112, moon 120x112, control-line 200x300, all flush.
-       arrangement: modular slabs right of x=480, meeting at the dial centre, bleeding top, right and bottom.
-       pattern: literal motif, the week dial: 28 ticks and two rings, because the dial is the product's signature.
-       scales: square corners on blocks, 4 ticks per day, 7 long ones, stroke from the logo. -->
-  <svg width="960" height="300" viewBox="0 0 960 300" aria-hidden="true">
-    <rect class="b-brass" x="480" y="0" width="280" height="188"/>
-    <rect class="b-raised" x="760" y="0" width="200" height="300"/>
-    <rect class="b-wait" x="480" y="188" width="160" height="112"/>
-    <rect class="b-moon" x="640" y="188" width="120" height="112"/>
-    <circle class="ring" cx="760" cy="188" r="140"/>
-    <line class="tick" x1="760.0" y1="38.0" x2="760.0" y2="14.0"/><line class="tick" x1="795.6" y1="32.0" x2="798.7" y2="18.4"/><line class="tick" x1="829.4" y1="43.8" x2="835.5" y2="31.2"/><line class="tick" x1="859.8" y1="62.9" x2="868.5" y2="52.0"/><line class="tick" x1="877.3" y1="94.5" x2="896.0" y2="79.5"/><line class="tick" x1="904.2" y1="118.6" x2="916.8" y2="112.5"/><line class="tick" x1="916.0" y1="152.4" x2="929.6" y2="149.3"/><line class="tick" x1="920.0" y1="188.0" x2="934.0" y2="188.0"/><line class="tick" x1="906.2" y1="221.4" x2="929.6" y2="226.7"/><line class="tick" x1="904.2" y1="257.4" x2="916.8" y2="263.5"/><line class="tick" x1="885.1" y1="287.8" x2="896.0" y2="296.5"/><line class="tick" x1="859.8" y1="313.1" x2="868.5" y2="324.0"/><line class="tick" x1="825.1" y1="323.1" x2="835.5" y2="344.8"/><line class="tick" x1="795.6" y1="344.0" x2="798.7" y2="357.6"/><line class="tick" x1="760.0" y1="348.0" x2="760.0" y2="362.0"/><line class="tick" x1="724.4" y1="344.0" x2="721.3" y2="357.6"/><line class="tick" x1="694.9" y1="323.1" x2="684.5" y2="344.8"/><line class="tick" x1="660.2" y1="313.1" x2="651.5" y2="324.0"/><line class="tick" x1="634.9" y1="287.8" x2="624.0" y2="296.5"/><line class="tick" x1="615.8" y1="257.4" x2="603.2" y2="263.5"/><line class="tick" x1="613.8" y1="221.4" x2="590.4" y2="226.7"/><line class="tick" x1="600.0" y1="188.0" x2="586.0" y2="188.0"/><line class="tick" x1="604.0" y1="152.4" x2="590.4" y2="149.3"/><line class="tick" x1="615.8" y1="118.6" x2="603.2" y2="112.5"/><line class="tick" x1="642.7" y1="94.5" x2="624.0" y2="79.5"/><line class="tick" x1="660.2" y1="62.9" x2="651.5" y2="52.0"/><line class="tick" x1="690.6" y1="43.8" x2="684.5" y2="31.2"/><line class="tick" x1="724.4" y1="32.0" x2="721.3" y2="18.4"/>
-    <line class="hand" x1="760" y1="188" x2="663.8" y2="91.8"/>
-    <circle class="pin" cx="760" cy="188" r="9"/>
+  <!-- ground: three shapes in periwinkle, sky and sand, blurred, bleeding top and right.
+       glass: one pane with the light top edge, the week dial seen through it.
+       motif: the dial with 28 ticks, hand at Sunday night in brass, the only ornament. -->
+  <div class="shape s1"></div><div class="shape s2"></div><div class="shape s3"></div>
+  <div class="pane pd-glass"></div>
+  <svg class="dial" width="200" height="200" viewBox="0 0 200 200" aria-hidden="true">
+    <circle class="ring" cx="100" cy="100" r="92"/>
+    <g id="ticks"></g>
+    <line class="hand" x1="100" y1="100" x2="44" y2="44"/>
+    <circle class="pin" cx="100" cy="100" r="6"/>
   </svg>
   <div class="text"><div class="name">Patchday</div><div class="tag">Updates on your schedule, with a way back.</div></div>
 </div>
+<script>
+  var g = document.getElementById('ticks');
+  for (var i = 0; i < 28; i++) {
+    var a = i / 28 * Math.PI * 2 - Math.PI / 2, long = i % 4 === 0;
+    var l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('class', 'tick');
+    l.setAttribute('x1', 100 + Math.cos(a) * (long ? 70 : 76)); l.setAttribute('y1', 100 + Math.sin(a) * (long ? 70 : 76));
+    l.setAttribute('x2', 100 + Math.cos(a) * 84); l.setAttribute('y2', 100 + Math.sin(a) * 84);
+    g.appendChild(l);
+  }
+</script>
 </body>
 </html>

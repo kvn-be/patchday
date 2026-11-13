@@ -1,11 +1,12 @@
 # Button
 
-A pill button in four variants: `pd-btn-main`, `pd-btn-line`, `pd-btn-coffee` and `pd-btn-icon`.
+A pill button: `pd-btn` plus `pd-btn-main`, `pd-btn-line` or `pd-btn-coffee`, optionally `pd-btn-small`. `pd-link` is the quiet text action.
 
-The consumer provides the `pd-btn` class plus one variant, the label and, for icon buttons, an `aria-label`.
+The consumer provides the label and, for icon-only buttons with `pd-btn-icon`, an `aria-label`.
 
-- Use one `pd-btn-main` per view for the action that matters most.
-- Use `pd-btn-line` for everything else.
-- Use `pd-btn-coffee` only for the link to `https://ko-fi.com/kvnbe`. It is the only `brass` fill, so nothing else may look like it.
-- The minimum height is 44px. Below 520px the header coffee button drops its label and keeps the cup.
-- Labels are verbs that say what happens: "Check now", not "OK".
+- Buttons are solid, never glass, so they read on any surface. Main is `ink` with white text (17.9:1), secondary is near-white with `ink` text and a `control-edge` border.
+- One `pd-btn-main` per page head, for the action that matters most. In rows the main action may repeat.
+- `pd-btn-coffee` only links to `https://ko-fi.com/kvnbe`.
+- `pd-btn-small` (36px) is for rows and the sidebar. Everything else is 44px.
+- Hover lifts 1px, press gives to 0.97. Both stop with reduced motion.
+- Labels are verbs: "Check now", "Update all", "Install".

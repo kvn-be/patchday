@@ -23,7 +23,10 @@ interface Api extends PackageApi {
 declare global {
   interface Window {
     patchday: Api;
-    Patchday: { mountWeekDial(svg: SVGSVGElement, input: HTMLInputElement, options: { hour: number; days: readonly string[]; short: readonly string[]; onChange(hour: number): void }): unknown };
+    Patchday: {
+      mountWeekDial(svg: SVGSVGElement, input: HTMLInputElement, options: { hour: number; days: readonly string[]; short: readonly string[]; onChange(hour: number): void }): unknown;
+      startParallax(root?: HTMLElement): () => void;
+    };
   }
 }
 
@@ -72,7 +75,7 @@ const formatWhen = (iso: string) => new Date(iso).toLocaleString(t().locale, { w
 const count = (items: ReportItem[], ...outcomes: ReportItem['outcome'][]) => items.filter((item) => outcomes.includes(item.outcome)).length;
 
 function bar(tone: 'ok' | 'fail' | 'active' | 'busy', percent: number | null, label: string): HTMLElement {
-  const track = element('div', `pd-progress pd-progress-${tone} bar`);
+  const track = element('div', `pd-progress pd-progress-${tone}`);
   track.setAttribute('role', 'progressbar');
   track.setAttribute('aria-label', label);
   if (percent !== null) track.setAttribute('aria-valuenow', String(percent));
@@ -84,7 +87,7 @@ function bar(tone: 'ok' | 'fail' | 'active' | 'busy', percent: number | null, la
 
 // Same anatomy as every other list: icon, name with source, version, status.
 function item(name: string, meta: string, version: string, pill: HTMLElement): HTMLElement {
-  const row = element('div', 'item');
+  const row = element('div', 'pd-item');
   const icon = element('span', 'icon', (name.trim()[0] ?? '?').toUpperCase());
   icon.setAttribute('aria-hidden', 'true');
   const title = element('div', 'name');
@@ -108,7 +111,7 @@ function renderLive(box: HTMLElement, items: ProgressItem[]): void {
   for (const entry of items) {
     const tone = entry.state === 'failed' ? 'fail' : entry.state === 'done' ? 'ok' : entry.percent === null ? 'busy' : 'active';
     const label = entry.state === 'done' ? t().bApplied : entry.state === 'failed' ? t().bFailed : entry.phase ? t()[PHASES[entry.phase]] : t().queued;
-    const pill = element('span', `pill pill-${entry.state === 'done' ? 'ok' : entry.state === 'failed' ? 'back' : 'plain'}`, label);
+    const pill = element('span', `pd-pill pd-pill-${entry.state === 'done' ? 'ok' : entry.state === 'failed' ? 'back' : 'plain'}`, label);
     const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, pill);
     row.append(bar(tone, entry.percent, entry.name));
     if (entry.reason) row.append(element('span', 'reason', reason(language(), entry.reason)));
@@ -143,10 +146,10 @@ function renderReport(): void {
   for (const [outcomes, label] of groups) {
     const members = current.items.filter((entry) => outcomes.includes(entry.outcome));
     if (members.length === 0) continue;
-    box.append(element('div', 'list-head', fill(t()[label] as string, { count: members.length })));
+    box.append(element('div', 'pd-list-head', fill(t()[label] as string, { count: members.length })));
     for (const entry of members) {
       const [tone, text] = PILL[entry.outcome];
-      const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, element('span', `pill pill-${tone}`, t()[text] as string));
+      const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, element('span', `pd-pill pd-pill-${tone}`, t()[text] as string));
       if (entry.reason) row.append(element('span', 'reason', reason(language(), entry.reason)));
       if (entry.detail) {
         const more = element('details', 'pd-detail');
@@ -201,8 +204,8 @@ function renderOverview(): void {
   if (lastRun) {
     const applied = count(lastRun.items, 'applied');
     const problems = count(lastRun.items, 'failed', 'rolled-back');
-    pills.append(element('span', 'pill pill-ok', `${applied} ${t().applied}`));
-    if (problems) pills.append(element('span', 'pill pill-back', problems === 1 ? t().problemOne : fill(t().problemMany, { count: problems })));
+    pills.append(element('span', 'pd-pill pd-pill-ok', `${applied} ${t().applied}`));
+    if (problems) pills.append(element('span', 'pd-pill pd-pill-back', problems === 1 ? t().problemOne : fill(t().problemMany, { count: problems })));
   }
   const first = current?.items.find((entry) => entry.outcome === 'waiting');
   $('card-wait').textContent = first ? first.name : t().waitNone;
@@ -232,7 +235,7 @@ function renderSchedule(): void {
   const chips = $('holds');
   chips.replaceChildren();
   for (const name of settings.holds) {
-    const chip = element('span', 'chip', name);
+    const chip = element('span', 'pd-chip', name);
     const remove = element('button', '', '×');
     (remove as HTMLButtonElement).type = 'button';
     remove.setAttribute('aria-label', fill(t().removeHold, { name }));
@@ -365,27 +368,6 @@ const views = createViews({
   ask,
 });
 
-// The colored ground drifts against the pointer; the glass above it stays still.
-function startParallax(): void {
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const root = document.documentElement;
-  let frame = 0;
-  let x = 0;
-  let y = 0;
-  const apply = () => {
-    frame = 0;
-    root.style.setProperty('--px', x.toFixed(3));
-    root.style.setProperty('--py', y.toFixed(3));
-  };
-  const queue = () => { if (!frame) frame = requestAnimationFrame(apply); };
-  window.addEventListener('pointermove', (event) => {
-    x = (event.clientX / window.innerWidth) * 2 - 1;
-    y = (event.clientY / window.innerHeight) * 2 - 1;
-    queue();
-  });
-  document.documentElement.addEventListener('pointerleave', () => { x = 0; y = 0; queue(); });
-}
-
 async function start(): Promise<void> {
   const state = await api.state();
   settings = state.settings;
@@ -396,7 +378,7 @@ async function start(): Promise<void> {
   $<HTMLInputElement>('portainer-url').value = settings.portainerUrl;
   renderAll();
   $('version').textContent = `${state.version}`;
-  startParallax();
+  window.Patchday.startParallax();
 
   all('[data-page]').forEach((node) => node.addEventListener('click', () => showPage(node.dataset.page as Page)));
   all('[data-goto]').forEach((node) => node.addEventListener('click', () => showPage(node.dataset.goto as Page)));

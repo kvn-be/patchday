@@ -39,7 +39,7 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', 
 }
 
 function button(label: string, tone: 'main' | 'line', onClick: () => void, small = true): HTMLButtonElement {
-  const node = element('button', `btn btn-${tone}${small ? ' btn-small' : ''}`, label);
+  const node = element('button', `pd-btn pd-btn-${tone}${small ? ' pd-btn-small' : ''}`, label);
   node.type = 'button';
   node.addEventListener('click', onClick);
   return node;
@@ -47,7 +47,7 @@ function button(label: string, tone: 'main' | 'line', onClick: () => void, small
 
 // Every list row has the same anatomy: icon, name with source, version, then actions.
 function row(name: string, meta: string, version: string, fresh = false): { row: HTMLElement; acts: HTMLElement } {
-  const node = element('div', 'item');
+  const node = element('div', 'pd-item');
   const icon = element('span', `icon${fresh ? ' new' : ''}`, (name.trim()[0] ?? '?').toUpperCase());
   icon.setAttribute('aria-hidden', 'true');
   const title = element('div', 'name');
@@ -169,7 +169,7 @@ export function createViews(ctx: ViewContext) {
     if (!page) return;
     page.replaceChildren();
 
-    const head = element('header', 'page-head');
+    const head = element('header', 'pd-page-head');
     const titles = element('div');
     const h1 = element('h1', '', t().navPackages);
     h1.id = 'packages-title';
@@ -198,7 +198,7 @@ export function createViews(ctx: ViewContext) {
     exportButton.id = 'export-button';
     head.append(titles, importButton, exportButton);
 
-    const search = element('label', 'search glass');
+    const search = element('label', 'search pd-glass');
     search.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>';
     const input = element('input');
     input.type = 'search';
@@ -225,14 +225,14 @@ export function createViews(ctx: ViewContext) {
     managers.id = 'search-managers';
     search.append(input, managers);
 
-    const filter = element('div', 'segmented');
+    const filter = element('div', 'pd-segmented');
     filter.id = 'package-filter';
     filter.setAttribute('role', 'group');
 
     const line = element('p', 'muted progress');
     line.id = 'package-status';
     line.setAttribute('role', 'status');
-    const panel = element('div', 'panel glass');
+    const panel = element('div', 'panel pd-glass');
     panel.id = 'package-list';
     page.append(head, search, filter, line, panel);
     renderList();
@@ -267,7 +267,7 @@ export function createViews(ctx: ViewContext) {
     for (const problem of inventory?.problems ?? []) panel.append(element('div', 'notes', problem));
 
     if (imported.length > 0 || importSkipped > 0) {
-      const head = element('div', 'list-head row');
+      const head = element('div', 'pd-list-head row');
       head.append(element('span', '', fill(t().fromList, { count: imported.length })));
       if (imported.length > 1) head.append(button(t().installAll, 'main', () => void perform('install', imported)));
       panel.append(head);
@@ -281,15 +281,15 @@ export function createViews(ctx: ViewContext) {
 
     const needle = query.trim().toLowerCase();
     const mine = all.filter((entry) => (!onlyUpdates || hasUpdate(entry)) && (!needle || `${entry.name} ${entry.id}`.toLowerCase().includes(needle)));
-    panel.append(element('div', 'list-head', fill(t().installedTitle, { count: mine.length })));
+    panel.append(element('div', 'pd-list-head', fill(t().installedTitle, { count: mine.length })));
     if (!inventory) panel.append(element('div', 'notes', t().loading));
     else if (mine.length === 0) panel.append(element('div', 'notes', t().noPackages));
     // Long lists stay fast: the first 400 rows are drawn, the search narrows the rest.
     for (const entry of mine.slice(0, 400)) {
       const update = hasUpdate(entry);
       const { row: node, acts } = row(entry.name, `${MANAGER_NAMES[entry.manager]} · ${entry.id}`, update ? `${entry.version} → ${entry.available}` : entry.version);
-      if (holds().has(entry.id) || holds().has(entry.name)) acts.append(element('span', 'pill pill-wait', t().ignored));
-      else if (entry.available && skippedVersion(entry) === entry.available) acts.append(element('span', 'pill pill-plain', fill(t().skippedNote, { version: entry.available })));
+      if (holds().has(entry.id) || holds().has(entry.name)) acts.append(element('span', 'pd-pill pd-pill-wait', t().ignored));
+      else if (entry.available && skippedVersion(entry) === entry.available) acts.append(element('span', 'pd-pill pd-pill-plain', fill(t().skippedNote, { version: entry.available })));
       if (update) {
         acts.append(button(t().updateOne, 'main', () => void perform('update', [entry])));
         acts.append(button(t().skipShort, 'line', async () => {
@@ -304,7 +304,7 @@ export function createViews(ctx: ViewContext) {
     if (needle.length >= 2) {
       const done = searchedFor === query.trim() && !searching;
       const title = !done ? t().searching : found.length ? fill(t().availableTitle, { count: found.length }) : t().noResults;
-      panel.append(element('div', 'list-head', title));
+      panel.append(element('div', 'pd-list-head', title));
       if (done) {
         for (const entry of found) {
           const { row: node, acts } = row(entry.name, `${MANAGER_NAMES[entry.manager]} · ${entry.id}`, entry.version, true);
@@ -323,20 +323,20 @@ export function createViews(ctx: ViewContext) {
     const page = document.getElementById('page-history');
     if (!page) return;
     page.replaceChildren();
-    const head = element('header', 'page-head');
+    const head = element('header', 'pd-page-head');
     const titles = element('div');
     const h1 = element('h1', '', t().navHistory);
     h1.id = 'history-title';
     titles.append(h1, element('p', '', t().historyLead));
     head.append(titles);
-    const panel = element('div', 'panel glass');
+    const panel = element('div', 'panel pd-glass');
     if (history.length === 0) panel.append(element('div', 'notes', t().historyEmpty));
     for (const entry of history) {
       const when = new Date(entry.at).toLocaleString(t().locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
       const managerName = entry.manager && entry.manager in MANAGER_NAMES ? MANAGER_NAMES[entry.manager as Manager] : '';
       const meta = [t()[ACTION_LABEL[entry.action]] as string, managerName].filter(Boolean).join(' · ');
       const { row: node, acts } = row(entry.name, meta, when);
-      acts.append(element('span', `pill pill-${entry.ok ? 'ok' : 'back'}`, entry.ok ? t().hOk : t().hFailed));
+      acts.append(element('span', `pd-pill pd-pill-${entry.ok ? 'ok' : 'back'}`, entry.ok ? t().hOk : t().hFailed));
       if (entry.detail) {
         const more = element('details', 'pd-detail');
         more.append(element('summary', '', t().details), element('pre', '', entry.detail));

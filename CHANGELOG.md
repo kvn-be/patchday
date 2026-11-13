@@ -6,12 +6,10 @@ All notable changes to Patchday are listed here. Versions follow [semantic versi
 
 ### Added
 
-- **Packages** tab: every installed package from Homebrew, winget, Chocolatey and Scoop, with filter, a package manager filter and a view of only packages with updates.
-- Select several packages to update or uninstall them together.
-- **Find** tab: search all package managers at once and install one or several results.
-- Skip a single version of a package, or ignore its updates until you allow them again.
-- Export the package list as JSON and import it on another computer.
-- **History** tab with the last 1000 installs, updates, removals and runs.
+- **Packages** page: every installed package from Homebrew, winget, Chocolatey and Scoop, and one search that also finds packages to install from all of them. Update, skip a version or uninstall right in the row.
+- Skip a single version of a package. The next newer version shows up again.
+- Export the package list as JSON and import it on another computer, then install everything from it at once.
+- **History** page with the last 1000 installs, updates, removals and runs.
 - Scoop on Windows, in the package tabs and in scheduled runs.
 - Patchday updates itself automatically: it checks once a day, downloads in the background and installs when you close it. **Update Patchday automatically** in **Settings** turns this off.
 

@@ -1,5 +1,5 @@
 export type Outcome = 'planned' | 'applied' | 'waiting' | 'rolled-back' | 'failed';
-export type ItemSource = 'docker' | 'brew' | 'winget' | 'choco';
+export type ItemSource = 'docker' | 'brew' | 'winget' | 'choco' | 'scoop';
 
 export interface ReportItem {
   source: ItemSource;
@@ -47,6 +47,11 @@ export interface Settings {
   theme: 'dark' | 'light';
   portainerUrl: string;
   adminAsked: boolean;
+  // Versions the user chose to skip, by manager:id.
+  skipped: Record<string, string>;
+  // Patchday checks for a new version of itself once a day and installs it when it closes.
+  autoSelfUpdate: boolean;
+  lastSelfCheck?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -59,6 +64,8 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
   portainerUrl: '',
   adminAsked: false,
+  skipped: {},
+  autoSelfUpdate: true,
 };
 
 export interface ExecResult {

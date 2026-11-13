@@ -43,7 +43,15 @@
     <div class="self-update" id="self-update" role="status" hidden>
       <p id="self-text"></p>
       <div class="pd-progress" id="self-bar" role="progressbar" hidden><span></span></div>
+      <div><button class="pd-btn pd-btn-line pd-btn-small" id="self-restart" type="button" data-i18n="selfRestart" hidden></button></div>
     </div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tab-updates" aria-controls="view-updates" data-tab="updates" data-i18n="tabUpdates"></button>
+      <button type="button" role="tab" id="tab-packages" aria-controls="view-packages" data-tab="packages" data-i18n="tabPackages"></button>
+      <button type="button" role="tab" id="tab-discover" aria-controls="view-discover" data-tab="discover" data-i18n="tabDiscover"></button>
+      <button type="button" role="tab" id="tab-history" aria-controls="view-history" data-tab="history" data-i18n="tabHistory"></button>
+    </div>
+    <div class="view" id="view-updates" role="tabpanel" aria-labelledby="tab-updates">
     <div class="actions">
       <button class="pd-btn pd-btn-main" id="check" type="button" data-i18n="check"></button>
       <button class="pd-btn pd-btn-line" id="update" type="button" data-i18n="update"></button>
@@ -51,6 +59,10 @@
       <span class="progress" id="progress" role="status"></span>
     </div>
     <div class="pd-window" id="report"></div>
+    </div>
+    <div class="view" id="view-packages" role="tabpanel" aria-labelledby="tab-packages" hidden></div>
+    <div class="view" id="view-discover" role="tabpanel" aria-labelledby="tab-discover" hidden></div>
+    <div class="view" id="view-history" role="tabpanel" aria-labelledby="tab-history" hidden></div>
   </section>
 </main>
 
@@ -61,6 +73,8 @@
         <p class="hint" data-i18n="applyHint"></p>
         <div class="admin-row" id="admin-row" hidden><p class="hint" id="admin-state"></p><button class="pd-btn pd-btn-line" id="admin-setup" type="button" data-i18n="adminAllow"></button></div>
         <label class="toggle"><input type="checkbox" id="minor"><span data-i18n="minorLabel"></span></label>
+        <label class="toggle"><input type="checkbox" id="auto-self"><span data-i18n="autoSelfLabel"></span></label>
+        <p class="hint" data-i18n="autoSelfHint"></p>
         <label class="field"><span data-i18n="holdsLabel"></span><input id="holds" type="text" autocomplete="off" spellcheck="false"></label>
         <label class="field"><span data-i18n="portainerUrl"></span><input id="portainer-url" type="url" placeholder="https://127.0.0.1:9443" autocomplete="off" spellcheck="false"></label>
         <label class="field"><span data-i18n="portainerToken"></span><input id="portainer-token" type="password" autocomplete="off"></label>
@@ -76,6 +90,14 @@
   <div class="actions">
     <button class="pd-btn pd-btn-main" id="confirm-yes" type="button" data-i18n="confirmYes"></button>
     <button class="pd-btn pd-btn-line" id="confirm-no" type="button" data-i18n="cancel"></button>
+  </div>
+</dialog>
+<dialog id="ask">
+  <h2 id="ask-title"></h2>
+  <p id="ask-text"></p>
+  <div class="actions">
+    <button class="pd-btn pd-btn-main" id="ask-yes" type="button"></button>
+    <button class="pd-btn pd-btn-line" id="ask-no" type="button" data-i18n="cancel"></button>
   </div>
 </dialog>
 <dialog id="admin">

@@ -10,8 +10,8 @@ All notable changes to Patchday are listed here. Versions follow [semantic versi
 - Skip a single version of a package. The next newer version shows up again.
 - Export the package list as JSON and import it on another computer, then install everything from it at once.
 - **History** page with the last 1000 installs, updates, removals and runs.
-- Scoop on Windows, in the package tabs and in scheduled runs.
-- Patchday updates itself automatically: it checks once a day, downloads in the background and installs when you close it. **Update Patchday automatically** in **Settings** turns this off.
+- Scoop on Windows, on the Packages page and in scheduled runs.
+- Patchday updates itself automatically: it checks once a day, downloads in the background and installs when you close it. **Update Patchday automatically** on the **Schedule** page turns this off.
 
 ### Changed
 
@@ -26,7 +26,7 @@ All notable changes to Patchday are listed here. Versions follow [semantic versi
 
 ### Security
 
-- Installs and removals started from the package tabs never run through the admin task, which still only accepts its fixed jobs. Package names are checked before they reach any command.
+- Installs and removals started from the Packages page never run through the admin task, which still only accepts its fixed jobs. Package names are checked before they reach any command.
 
 ## 0.2.3 - 2026-11-13
 

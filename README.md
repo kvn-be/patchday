@@ -5,12 +5,12 @@
 <h1 align="center">Patchday</h1>
 
 <p align="center">
-  Scheduled, rule-based updates for Homebrew, winget, Chocolatey and Docker, with a backup first, a health check after, and a rollback if anything fails.
+  Scheduled, rule-based updates for Homebrew, winget, Chocolatey, Scoop and Docker, with a backup first, a health check after, and a rollback if anything fails. Find, install and remove packages in one place.
 </p>
 
 <p align="center">
   <img alt="Platforms: macOS and Windows" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-1a1d3b">
-  <img alt="Version 0.2.3" src="https://img.shields.io/badge/version-0.2.3-dcbb7b">
+  <img alt="Version 1.0.0" src="https://img.shields.io/badge/version-1.0.0-dcbb7b">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-1a1d3b">
   <a href="https://ko-fi.com/kvnbe"><img alt="Buy me a coffee on Ko-fi" src="https://img.shields.io/badge/Ko--fi-buy%20me%20a%20coffee-dcbb7b"></a>
 </p>
@@ -31,6 +31,7 @@
 - [Get started](#get-started)
 - [How a run works](#how-a-run-works)
 - [The rules](#the-rules)
+- [Manage packages](#manage-packages)
 - [Docker and Portainer](#docker-and-portainer)
 - [Settings](#settings)
 - [Your data](#your-data)
@@ -45,13 +46,17 @@
 
 - **Pick your own time.** Drag the hand on a dial with all 168 hours of the week.
 - **See changes before they happen.** **Check now** lists every update and changes nothing.
-- **Update packages.** Homebrew on macOS, winget and Chocolatey on Windows.
+- **Update packages.** Homebrew on macOS, winget, Chocolatey and Scoop on Windows.
+- **Manage packages.** See everything installed, search all package managers at once, and install, update or remove several packages in one go.
+- **Skip or ignore updates.** Skip one version of a package, or ignore its updates until you allow them again.
+- **Move to a new computer.** Export your package list and import it on another machine.
+- **Look back.** The history keeps the last 1000 installs, updates, removals and runs.
 - **Update Docker containers.** Patchday finds Compose stacks by itself and works with Portainer if you use it.
 - **Stay in control.** Risky updates become suggestions that wait for your decision.
 - **Recover from bad updates.** A stack that does not come back healthy returns to its old version.
 - **Watch it happen.** Every update has its own progress bar, and failures show a short reason.
 - **Fix common failures.** Busy apps, bad downloads and network errors are retried once automatically.
-- **Update itself.** The **Update Patchday** button looks for a new version and installs it. Patchday also tells you when one is out.
+- **Update itself.** Patchday checks once a day, downloads a new version in the background and installs it when you close it. You can turn this off.
 - **Allow admin rights once.** On Windows, one confirmation replaces a prompt for every app.
 - **English and German.** Dark by default, with a light theme.
 
@@ -66,14 +71,14 @@ Download the latest version from the [Releases page](https://github.com/kvn-be/p
 
 ### Windows
 
-1. Download and run `Patchday-Setup-0.2.3.exe`.
+1. Download and run `Patchday-Setup-1.0.0.exe`.
 2. If Windows shows "Windows protected your PC", select **More info**, then **Run anyway**. The warning appears because the app is not signed yet.
 3. Follow the installer and start Patchday.
 4. On first start, select **Allow once** and confirm the Windows prompt. Patchday creates a task that installs updates without asking again. You can do this later in **Settings**.
 
 ### macOS
 
-1. Download and open `Patchday-0.2.3-arm64.dmg` for Apple silicon, or `Patchday-0.2.3-x64.dmg` for Intel Macs.
+1. Download and open `Patchday-1.0.0-arm64.dmg` for Apple silicon, or `Patchday-1.0.0-x64.dmg` for Intel Macs.
 2. Drag Patchday to **Applications**.
 3. Start it. macOS blocks unsigned apps, so go to **System Settings > Privacy & Security** and select **Open Anyway**.
 
@@ -128,13 +133,33 @@ Patchday uses fixed rules and no AI. A container only updates automatically if e
 | Runs automatically | Suggestion only | Never |
 | --- | --- | --- |
 | Patch updates of healthy containers | Major updates | Delete volumes or databases |
-| Homebrew, winget and Chocolatey packages | Databases and caches | `docker system prune` |
+| Homebrew, winget, Chocolatey and Scoop packages | Databases and caches | `docker system prune` |
 | Minor updates with release notes that show no breaking changes (see [Known limits](#known-limits)) | Network and DNS services such as `cloudflared` | Change a stack behind Portainer's back |
 | | Portainer itself, locally built images, prerelease tags | |
 | | Unhealthy containers and images without a build for your CPU | |
 | | Anything on your **Never update** list | |
 
 Image tags keep their scheme: `1.2.3-alpine` only moves to another `-alpine` tag.
+
+## Manage packages
+
+Four tabs sit next to the dial: **Updates**, **Packages**, **Find** and **History**.
+
+| Tab | What you can do |
+| --- | --- |
+| Packages | See every installed package with its version and a known update. Filter by name or package manager, or show only packages with updates. Select several to update or uninstall them together. |
+| Find | Search Homebrew, winget, Chocolatey and Scoop at once, then install one or several results. |
+| History | See the last 1000 installs, updates, removals and runs, with the tool's message for failures. |
+
+In the **⋯** menu of a package:
+
+- **Skip 1.2.3** hides this one version. The next newer version shows up again.
+- **Ignore updates** adds the package to the **Never update** list. Scheduled runs leave it alone, too.
+- **Uninstall** removes the package after you confirm.
+
+**Export list** saves the selected packages, or all shown packages, as a JSON file. **Import list** reads such a file and shows the packages that are not installed yet, ready to install. Entries this system cannot install are left out and counted.
+
+Installs and removals you start yourself run in your own user account, never through the admin task. On Windows, installers may ask for admin rights, and Chocolatey always does.
 
 ## Docker and Portainer
 
@@ -159,6 +184,7 @@ While Portainer is running and no token is saved, stacks that might belong to it
 | Run on this schedule | Off | Registers the run with launchd on macOS or Task Scheduler on Windows. |
 | Install updates on schedule | Off | While off, scheduled runs only report. |
 | Install minor updates automatically | On | While off, minor updates of containers are suggestions. |
+| Update Patchday automatically | On | Checks once a day, downloads in the background and installs when you close Patchday. |
 | Never update | Empty | Names of images or packages to leave alone, separated by commas. |
 | Portainer address and token | Empty | Connects Portainer stacks. |
 
@@ -174,7 +200,8 @@ Patchday has no account and no telemetry. Everything stays on your computer:
 
 Inside that folder:
 
-- `settings.json`: your settings.
+- `settings.json`: your settings, including skipped versions.
+- `history.json`: the last 1000 installs, updates, removals and runs.
 - `reports/`: one file per run.
 - `backups/`: stack files and database dumps, one folder per stack update. These may contain sensitive data. After each run, folders older than 30 days are removed, but the 10 newest always stay. Folders you add by hand are never touched.
 - `portainer.token`: your token, encrypted by the operating system.
@@ -237,7 +264,10 @@ scripts/      Build script
 - Builds are not signed, so both systems show a warning.
 - Versions before 0.2.0 cannot update themselves, so install 0.2.0 by hand once.
 - Scheduled runs on Windows, the admin task and winget support have had little real-world testing.
-- Homebrew, winget and Chocolatey report no percentage, so their bars show activity until a package is finished.
+- Homebrew, winget, Chocolatey and Scoop report no percentage, so their bars show activity until a package is finished.
+- Scoop and the package tabs on Windows have had little real-world testing.
+- Package details such as publisher, download size or install options, and installing a specific older version, are not available yet.
+- With the admin task set up, scheduled runs also update Scoop apps with admin rights. Scoop warns about that but works.
 - Some installers refuse to run as administrator. They show that as the reason.
 
 ## Support

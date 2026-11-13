@@ -2,6 +2,27 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## 1.0.0 - Unreleased
+
+### Added
+
+- **Packages** tab: every installed package from Homebrew, winget, Chocolatey and Scoop, with filter, a package manager filter and a view of only packages with updates.
+- Select several packages to update or uninstall them together.
+- **Find** tab: search all package managers at once and install one or several results.
+- Skip a single version of a package, or ignore its updates until you allow them again.
+- Export the package list as JSON and import it on another computer.
+- **History** tab with the last 1000 installs, updates, removals and runs.
+- Scoop on Windows, in the package tabs and in scheduled runs.
+- Patchday updates itself automatically: it checks once a day, downloads in the background and installs when you close it. **Update Patchday automatically** in **Settings** turns this off.
+
+### Changed
+
+- Scheduled runs leave skipped versions alone.
+
+### Security
+
+- Installs and removals started from the package tabs never run through the admin task, which still only accepts its fixed jobs. Package names are checked before they reach any command.
+
 ## 0.2.3 - 2026-11-13
 
 ### Added

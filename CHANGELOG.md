@@ -6,7 +6,7 @@ All notable changes to Patchday are listed here. Versions follow [semantic versi
 
 ### Added
 
-- Old backups are cleaned up after each run. Patchday keeps the backups of the last 10 runs.
+- Old backups are cleaned up after each run. Folders older than 30 days are removed, the 10 newest always stay.
 - Checks for pull requests: tests and type checks run on every pull request and push to `main`.
 - `SECURITY.md` with the way to report a vulnerability.
 - `docs/testing.md` with a manual test checklist for real machines.

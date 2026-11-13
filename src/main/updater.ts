@@ -29,14 +29,14 @@ function updater() {
 }
 
 // Windows: electron-updater verifies the download against the checksum in the release.
-export async function installWindows(onPercent: (percent: number) => void): Promise<void> {
+export async function installWindows(onPercent: (percent: number) => void, reopen = true): Promise<void> {
   const autoUpdater = updater();
   autoUpdater.on('download-progress', (progress) => onPercent(Math.round(progress.percent)));
   const found = await autoUpdater.checkForUpdates();
   if (!found?.isUpdateAvailable) throw new Error('no update found');
   await autoUpdater.downloadUpdate();
   onPercent(100);
-  setTimeout(() => autoUpdater.quitAndInstall(true, true), 2000);
+  setTimeout(() => autoUpdater.quitAndInstall(true, reopen), 2000);
 }
 
 async function download(url: string, path: string, onPercent: (percent: number) => void): Promise<void> {
@@ -58,8 +58,16 @@ async function sha512(path: string): Promise<string> {
   return hash.digest('base64');
 }
 
+export interface StagedMac {
+  version: string;
+  folder: string;
+  fresh: string;
+  bundle: string;
+}
+
 // macOS: the built-in updater only accepts signed apps, so the bundle is replaced directly.
-export async function installMac(release: Release, onPercent: (percent: number) => void): Promise<void> {
+// The new app is downloaded, checked and unpacked first; the swap happens once Patchday has quit.
+export async function stageMac(release: Release, onPercent: (percent: number) => void): Promise<StagedMac> {
   const bundle = resolve(process.execPath, '../../..');
   if (!bundle.endsWith('.app') || bundle.startsWith('/Volumes/') || bundle.includes('/AppTranslocation/')) {
     throw new Error('move Patchday to Applications first');
@@ -89,15 +97,39 @@ export async function installMac(release: Release, onPercent: (percent: number) 
     const info = await exec('defaults', ['read', join(fresh, 'Contents', 'Info'), 'CFBundleShortVersionString']);
     if (info.stdout.trim() !== release.version) throw new Error('update has the wrong version');
     await rm(archive, { force: true });
-
-    const script = join(folder, 'swap.sh');
-    await writeFile(script, MAC_SWAP_SCRIPT);
-    await chmod(script, 0o700);
     onPercent(100);
-    spawn('/bin/bash', [script, String(process.pid), bundle, fresh], { detached: true, stdio: 'ignore' }).unref();
-    setTimeout(() => app.quit(), 500);
+    return { version: release.version, folder, fresh, bundle };
   } catch (error) {
     await rm(folder, { recursive: true, force: true });
     throw error;
   }
+}
+
+// Starts the swap, which waits until this process has ended. With reopen, the new version starts afterwards.
+export async function swapMac(staged: StagedMac, reopen: boolean): Promise<void> {
+  await access(staged.fresh).catch(() => { throw new Error('the downloaded update is gone, check again'); });
+  const script = join(staged.folder, 'swap.sh');
+  await writeFile(script, MAC_SWAP_SCRIPT);
+  await chmod(script, 0o700);
+  spawn('/bin/bash', [script, String(process.pid), staged.bundle, staged.fresh, ...(reopen ? [] : ['--no-open'])], { detached: true, stdio: 'ignore' }).unref();
+}
+
+export async function installMac(release: Release, onPercent: (percent: number) => void): Promise<void> {
+  await swapMac(await stageMac(release, onPercent), true);
+  setTimeout(() => app.quit(), 500);
+}
+
+// Windows: electron-updater keeps the verified download and runs the installer when Patchday quits.
+export async function stageWindows(): Promise<string | null> {
+  const autoUpdater = updater();
+  const found = await autoUpdater.checkForUpdates();
+  if (!found?.isUpdateAvailable) return null;
+  await autoUpdater.downloadUpdate();
+  autoUpdater.autoInstallOnAppQuit = true;
+  return found.updateInfo.version;
+}
+
+// Used when the admin task takes over, so the installer does not run twice.
+export function cancelInstallOnQuit(): void {
+  electronUpdater.autoUpdater.autoInstallOnAppQuit = false;
 }

@@ -179,8 +179,10 @@ function renderOverview(): void {
   $('hero-when').textContent = current ? fill(t().checkedAt, { when: formatWhen(current.startedAt) }) : t().notChecked;
   const title = planned === 0 && waiting > 0 ? (waiting === 1 ? t().heroWaitOne : fill(t().heroWaiting, { count: waiting })) : ready === 1 ? t().heroOne : fill(t().heroCount, { count: ready });
   $('hero-title').textContent = !current ? t().heroNoCheck : ready === 0 ? t().heroClear : title;
-  const text = waiting === 0 ? t().heroTextAuto : planned === 0 ? t().heroTextWait : t().heroText;
-  $('hero-text').textContent = !current ? t().heroTextNoCheck : ready === 0 ? t().heroTextClear : fill(text, { auto: planned, wait: waiting });
+  const autoText = planned === 1 ? t().heroAutoOne : fill(t().heroAutoMany, { count: planned });
+  const waitText = waiting === 1 ? t().heroWaitSingle : fill(t().heroWaitMany, { count: waiting });
+  const text = waiting === 0 ? t().heroTextAuto : planned === 0 ? t().heroTextWait : `${autoText} ${waitText}`;
+  $('hero-text').textContent = !current ? t().heroTextNoCheck : ready === 0 ? t().heroTextClear : text;
   $<HTMLButtonElement>('hero-update').disabled = busy || planned === 0;
   const nav = $('nav-count');
   nav.hidden = ready === 0;
@@ -200,12 +202,12 @@ function renderOverview(): void {
     const applied = count(lastRun.items, 'applied');
     const problems = count(lastRun.items, 'failed', 'rolled-back');
     pills.append(element('span', 'pill pill-ok', `${applied} ${t().applied}`));
-    if (problems) pills.append(element('span', 'pill pill-back', `${problems} ${t().problems}`));
+    if (problems) pills.append(element('span', 'pill pill-back', problems === 1 ? t().problemOne : fill(t().problemMany, { count: problems })));
   }
   const first = current?.items.find((entry) => entry.outcome === 'waiting');
   $('card-wait').textContent = first ? first.name : t().waitNone;
   $('card-wait-text').textContent = first
-    ? [`${first.from} → ${first.to}: ${reason(language(), first.reason)}.`, waiting > 1 ? fill(t().waitMore, { count: waiting - 1 }) : ''].filter(Boolean).join(' ')
+    ? [`${first.from} → ${first.to}: ${reason(language(), first.reason)}.`, waiting === 2 ? t().waitMoreOne : waiting > 2 ? fill(t().waitMore, { count: waiting - 1 }) : ''].filter(Boolean).join(' ')
     : t().waitNoneText;
 }
 

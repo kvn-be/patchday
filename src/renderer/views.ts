@@ -20,17 +20,16 @@ export interface ViewContext {
   api: PackageApi;
   t(): Strings;
   settings(): Settings;
-  patch(values: Partial<Settings>): Promise<void>;
   setSettings(settings: Settings): void;
   busy(): boolean;
   setBusy(label: string): void;
   ask(title: string, text: string, yes: string): Promise<boolean>;
-  showTab(tab: 'updates' | 'packages' | 'discover' | 'history'): void;
 }
 
 const MANAGER_NAMES: Record<Manager, string> = { brew: 'Homebrew', winget: 'winget', choco: 'Chocolatey', scoop: 'Scoop' };
 const key = (entry: Pick<Package, 'manager' | 'id'>) => `${entry.manager}:${entry.id}`;
 const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ''));
+const SEARCH_DELAY_MS = 700;
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
@@ -40,60 +39,62 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', 
 }
 
 function button(label: string, tone: 'main' | 'line', onClick: () => void, small = true): HTMLButtonElement {
-  const node = element('button', `pd-btn pd-btn-${tone}${small ? ' pd-btn-small' : ''}`, label);
+  const node = element('button', `btn btn-${tone}${small ? ' btn-small' : ''}`, label);
   node.type = 'button';
   node.addEventListener('click', onClick);
   return node;
 }
 
-function checkbox(checked: boolean, label: string, onChange: (checked: boolean) => void): HTMLInputElement {
-  const box = element('input');
-  box.type = 'checkbox';
-  box.checked = checked;
-  box.setAttribute('aria-label', label);
-  box.addEventListener('change', () => onChange(box.checked));
-  return box;
+// Every list row has the same anatomy: icon, name with source, version, then actions.
+function row(name: string, meta: string, version: string, fresh = false): { row: HTMLElement; acts: HTMLElement } {
+  const node = element('div', 'item');
+  const icon = element('span', `icon${fresh ? ' new' : ''}`, (name.trim()[0] ?? '?').toUpperCase());
+  icon.setAttribute('aria-hidden', 'true');
+  const title = element('div', 'name');
+  title.append(element('span', '', name), element('small', '', meta));
+  const ver = element('span', 'ver', version);
+  ver.title = version;
+  const acts = element('div', 'acts');
+  node.append(icon, title, ver, acts);
+  return { row: node, acts };
 }
 
 export function createViews(ctx: ViewContext) {
   let inventory: Awaited<ReturnType<PackageApi['packages']>> | null = null;
   let loading = false;
-  let filter = '';
-  let managerFilter: Manager | '' = '';
-  let onlyUpdates = false;
-  const picked = new Set<string>();
-  let results: Package[] = [];
-  let resultMode: 'search' | 'import' = 'search';
-  let importSkipped = 0;
-  const found = new Set<string>();
   let query = '';
-  let searched = false;
+  let onlyUpdates = false;
+  let found: Package[] = [];
+  let searching = false;
+  let searchedFor = '';
+  let imported: Package[] = [];
+  let importSkipped = 0;
   let history: HistoryEntry[] = [];
-  let packageStatus = '';
-  let discoverStatus = '';
-  let progress: { done: number; total: number } | null = null;
+  let status = '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   const t = ctx.t;
   const language = () => ctx.settings().language as Language;
   const holds = () => new Set(ctx.settings().holds);
   const skippedVersion = (entry: Package) => ctx.settings().skipped[key(entry)];
-  const hasUpdate = (entry: Package) => Boolean(entry.available) && skippedVersion(entry) !== entry.available && !holds().has(entry.id);
-  const installedKeys = () => new Set((inventory?.packages ?? []).map(key));
+  const hasUpdate = (entry: Package) => Boolean(entry.available) && skippedVersion(entry) !== entry.available && !holds().has(entry.id) && !holds().has(entry.name);
+  const isInstalled = (entry: Package) => {
+    const short = (id: string) => id.split('/').pop();
+    return (inventory?.packages ?? []).some((have) => have.manager === entry.manager && (have.id === entry.id || short(have.id) === short(entry.id)));
+  };
+  const clean = (error: unknown) => reason(language(), (error as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
 
   async function loadPackages(): Promise<void> {
     if (loading) return;
     loading = true;
-    packageStatus = t().loading;
-    render();
+    renderList();
     try {
       inventory = await ctx.api.packages();
-      packageStatus = '';
-      for (const entry of [...picked]) if (!inventory.packages.some((item) => key(item) === entry)) picked.delete(entry);
     } catch (error) {
-      packageStatus = `${t().actionFailed} ${clean(error)}`;
+      status = `${t().actionFailed} ${clean(error)}`;
     } finally {
       loading = false;
-      render();
+      renderList();
     }
   }
 
@@ -102,282 +103,216 @@ export function createViews(ctx: ViewContext) {
     renderHistory();
   }
 
-  function clean(error: unknown): string {
-    return reason(language(), (error as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+  async function runSearch(): Promise<void> {
+    const text = query.trim();
+    if (text.length < 2 || text === searchedFor) return;
+    searching = true;
+    renderList();
+    try {
+      if (!inventory) await loadPackages();
+      const result = await ctx.api.search(text, inventory?.managers ?? []);
+      if (query.trim() !== text) return;
+      // Exact names first, then names that start with the search, then the rest.
+      const needle = text.toLowerCase();
+      const rank = (entry: Package) => { const name = entry.name.toLowerCase(); const id = entry.id.toLowerCase(); return name === needle || id === needle || id.endsWith(`/${needle}`) ? 0 : name.startsWith(needle) || id.startsWith(needle) ? 1 : name.includes(needle) ? 2 : 3; };
+      found = result.packages.filter((entry) => !isInstalled(entry)).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+      searchedFor = text;
+      if (result.problems.length) status = result.problems.join(' ');
+    } catch (error) {
+      found = [];
+      searchedFor = text;
+      status = clean(error);
+    } finally {
+      searching = false;
+      renderList();
+    }
   }
 
-  async function perform(action: PackageAction, packages: Package[], where: 'packages' | 'discover'): Promise<void> {
+  async function perform(action: PackageAction, packages: Package[]): Promise<void> {
     if (packages.length === 0) return;
     if (ctx.busy()) {
-      setStatus(where, t().busyNote);
+      status = t().busyNote;
+      renderList();
       return;
     }
     const names = packages.slice(0, 8).map((entry) => entry.name).join(', ') + (packages.length > 8 ? ', …' : '');
     if (action === 'uninstall' && !(await ctx.ask(t().confirmUninstallTitle, fill(t().confirmUninstallText, { names }), t().uninstallOne))) return;
     if (action === 'install' && !(await ctx.ask(t().confirmInstallTitle, fill(t().confirmInstallText, { names }), t().installOne))) return;
-    progress = { done: 0, total: packages.length };
-    ctx.setBusy(fill(t().working, progress));
-    setStatus(where, fill(t().working, progress));
+    status = fill(t().working, { done: 0, total: packages.length });
+    ctx.setBusy(status);
+    renderList();
     try {
       const outcome = await ctx.api.packageAction(action, packages);
       const ok = outcome.filter((result) => result.ok).length;
-      setStatus(where, fill(t().actionDone, { ok, failed: outcome.length - ok }));
-      for (const result of outcome) if (result.ok) (where === 'packages' ? picked : found).delete(result.key);
+      status = fill(t().actionDone, { ok, failed: outcome.length - ok });
+      const done = new Set(outcome.filter((result) => result.ok).map((result) => result.key));
+      found = found.filter((entry) => !done.has(key(entry)));
+      imported = imported.filter((entry) => !done.has(key(entry)));
     } catch (error) {
-      setStatus(where, `${t().actionFailed} ${clean(error)}`);
+      status = `${t().actionFailed} ${clean(error)}`;
     } finally {
-      progress = null;
       ctx.setBusy('');
     }
     await Promise.all([loadPackages(), loadHistory()]);
   }
 
-  function setStatus(where: 'packages' | 'discover', text: string): void {
-    if (where === 'packages') packageStatus = text;
-    else discoverStatus = text;
-    render();
-  }
-
   ctx.api.onPackageProgress((result) => {
-    progress = { done: result.index + 1, total: result.total };
-    const text = fill(t().working, progress);
-    ctx.setBusy(text);
-    if (packageStatus.length && progress) packageStatus = text;
-    if (discoverStatus.length && progress) discoverStatus = text;
-    render();
+    status = fill(t().working, { done: result.index + 1, total: result.total });
+    ctx.setBusy(status);
+    renderList();
   });
 
   // ---------- Packages ----------
 
-  function visiblePackages(): Package[] {
-    const needle = filter.trim().toLowerCase();
-    return (inventory?.packages ?? []).filter((entry) =>
-      (!managerFilter || entry.manager === managerFilter)
-      && (!onlyUpdates || hasUpdate(entry))
-      && (!needle || `${entry.name} ${entry.id}`.toLowerCase().includes(needle)));
-  }
-
-  function packageRow(entry: Package): HTMLElement {
-    const row = element('div', 'pkg-row');
-    const id = key(entry);
-    row.append(checkbox(picked.has(id), entry.name, (checked) => {
-      if (checked) picked.add(id);
-      else picked.delete(id);
-      renderPackages();
-    }));
-    const title = element('div', 'pkg-name');
-    title.append(element('span', '', entry.name), element('small', '', `${MANAGER_NAMES[entry.manager]} · ${entry.id}`));
-    row.append(title);
-
-    const held = holds().has(entry.id);
-    const skipped = skippedVersion(entry);
-    const version = element('span', 'pd-ver', hasUpdate(entry) ? `${entry.version} → ${entry.available}` : entry.version);
-    version.title = version.textContent ?? '';
-    row.append(version);
-
-    const actions = element('div', 'pkg-actions');
-    if (held) actions.append(element('span', 'pd-badge pd-badge-wait', t().ignored));
-    else if (entry.available && skipped === entry.available) actions.append(element('span', 'pd-badge pd-badge-plain', fill(t().skippedNote, { version: entry.available })));
-    if (hasUpdate(entry)) actions.append(button(t().updateOne, 'main', () => void perform('update', [entry], 'packages')));
-    const more = element('details', 'pkg-more');
-    const summary = element('summary', 'pd-btn pd-btn-line pd-btn-small', '⋯');
-    summary.setAttribute('aria-label', fill(t().moreActions, { name: entry.name }));
-    const menu = element('div', 'pkg-menu');
-    if (hasUpdate(entry) && entry.available) {
-      menu.append(button(fill(t().skipVersion, { version: entry.available }), 'line', async () => {
-        ctx.setSettings(await ctx.api.skip(id, entry.available as string));
-        render();
-      }));
-    }
-    menu.append(button(held ? t().unignore : t().ignore, 'line', async () => {
-      const next = held ? ctx.settings().holds.filter((name) => name !== entry.id) : [...ctx.settings().holds, entry.id];
-      await ctx.patch({ holds: next });
-      render();
-    }));
-    menu.append(button(t().uninstallOne, 'line', () => void perform('uninstall', [entry], 'packages')));
-    more.append(summary, menu);
-    actions.append(more);
-    row.append(actions);
-    return row;
-  }
-
   function renderPackages(): void {
-    const box = document.getElementById('view-packages');
-    if (!box) return;
-    box.replaceChildren();
+    const page = document.getElementById('page-packages');
+    if (!page) return;
+    page.replaceChildren();
 
-    const tools = element('div', 'pkg-tools');
-    const search = element('input', 'pkg-filter');
-    search.type = 'search';
-    search.placeholder = t().filter;
-    search.setAttribute('aria-label', t().filter);
-    search.value = filter;
-    search.addEventListener('input', () => {
-      filter = search.value;
-      renderPackageList();
-    });
-    const select = element('select', 'pkg-select');
-    select.setAttribute('aria-label', t().allManagers);
-    select.append(new Option(t().allManagers, ''));
-    for (const manager of inventory?.managers ?? []) select.append(new Option(MANAGER_NAMES[manager], manager));
-    select.value = managerFilter;
-    select.addEventListener('change', () => {
-      managerFilter = select.value as Manager | '';
-      renderPackageList();
-    });
-    const only = element('label', 'toggle');
-    only.append(checkbox(onlyUpdates, t().onlyUpdates, (checked) => {
-      onlyUpdates = checked;
-      renderPackageList();
-    }), element('span', '', t().onlyUpdates));
-    tools.append(search, select, only);
-
-    const buttons = element('div', 'actions');
-    const refresh = button(t().refresh, 'line', () => void loadPackages());
-    refresh.disabled = loading;
-    const exportButton = button(t().exportList, 'line', async () => {
-      const chosen = picked.size ? (inventory?.packages ?? []).filter((entry) => picked.has(key(entry))) : visiblePackages();
-      try {
-        const count = await ctx.api.exportPackages(chosen);
-        if (count !== null) setStatus('packages', fill(t().exported, { count }));
-      } catch (error) {
-        setStatus('packages', `${t().actionFailed} ${clean(error)}`);
-      }
-    });
-    exportButton.disabled = !inventory || inventory.packages.length === 0;
+    const head = element('header', 'page-head');
+    const titles = element('div');
+    const h1 = element('h1', '', t().navPackages);
+    h1.id = 'packages-title';
+    titles.append(h1, element('p', '', t().packagesLead));
     const importButton = button(t().importList, 'line', async () => {
       try {
         const list = await ctx.api.importPackages();
         if (!list) return;
-        results = list.packages;
+        if (!inventory) await loadPackages();
+        imported = list.packages.filter((entry) => !isInstalled(entry));
         importSkipped = list.skipped;
-        resultMode = 'import';
-        found.clear();
-        const have = installedKeys();
-        for (const entry of results) if (!have.has(key(entry))) found.add(key(entry));
-        if (!inventory) void loadPackages();
-        ctx.showTab('discover');
-        render();
       } catch (error) {
-        setStatus('packages', `${t().actionFailed} ${clean(error)}`);
+        status = `${t().actionFailed} ${clean(error)}`;
       }
-    });
-    buttons.append(refresh, exportButton, importButton);
-    if (picked.size > 0) {
-      const chosen = (inventory?.packages ?? []).filter((entry) => picked.has(key(entry)));
-      const bulk = element('div', 'pkg-bulk');
-      const update = button(t().updateSelected, 'main', () => void perform('update', chosen.filter(hasUpdate), 'packages'));
-      update.disabled = ctx.busy() || !chosen.some(hasUpdate);
-      const remove = button(t().uninstallSelected, 'line', () => void perform('uninstall', chosen, 'packages'));
-      remove.disabled = ctx.busy();
-      bulk.append(element('span', 'hint', fill(t().selected, { count: picked.size })), update, remove);
-      buttons.append(bulk);
-    }
+      renderList();
+    }, false);
+    const exportButton = button(t().exportList, 'line', async () => {
+      try {
+        const count = await ctx.api.exportPackages(inventory?.packages ?? []);
+        if (count !== null) status = fill(t().exported, { count });
+      } catch (error) {
+        status = `${t().actionFailed} ${clean(error)}`;
+      }
+      renderList();
+    }, false);
+    exportButton.id = 'export-button';
+    head.append(titles, importButton, exportButton);
 
-    const status = element('p', 'hint pkg-status');
-    status.setAttribute('role', 'status');
-    status.id = 'pkg-status';
-    const list = element('div', 'pd-window pkg-list');
-    list.id = 'pkg-list';
-    box.append(tools, buttons, status, list);
-    renderPackageList();
-  }
-
-  function renderPackageList(): void {
-    const list = document.getElementById('pkg-list');
-    const status = document.getElementById('pkg-status');
-    if (!list || !status) return;
-    list.replaceChildren();
-    const all = inventory?.packages ?? [];
-    const counts = inventory ? `${fill(t().packageCount, { count: all.length })} · ${fill(t().updateCount, { count: all.filter(hasUpdate).length })}` : '';
-    status.textContent = packageStatus || counts;
-    if (inventory && inventory.managers.length === 0) {
-      list.append(element('div', 'notes', t().noManager));
-      return;
-    }
-    for (const problem of inventory?.problems ?? []) list.append(element('div', 'notes', problem));
-    const visible = visiblePackages();
-    if (inventory && visible.length === 0) list.append(element('div', 'notes', t().noPackages));
-    // Long lists stay fast: the first 400 rows are drawn, the filter narrows the rest.
-    for (const entry of visible.slice(0, 400)) list.append(packageRow(entry));
-  }
-
-  // ---------- Find ----------
-
-  async function runSearch(): Promise<void> {
-    if (!query.trim()) return;
-    resultMode = 'search';
-    discoverStatus = t().searching;
-    render();
-    try {
-      if (!inventory) await loadPackages();
-      const result = await ctx.api.search(query, inventory?.managers ?? []);
-      results = result.packages;
-      found.clear();
-      searched = true;
-      discoverStatus = result.problems.join(' ');
-    } catch (error) {
-      discoverStatus = `${t().actionFailed} ${clean(error)}`;
-    }
-    render();
-  }
-
-  function renderDiscover(): void {
-    const box = document.getElementById('view-discover');
-    if (!box) return;
-    box.replaceChildren();
-    const form = element('form', 'pkg-tools');
-    const input = element('input', 'pkg-filter');
+    const search = element('label', 'search glass');
+    search.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>';
+    const input = element('input');
     input.type = 'search';
-    input.placeholder = t().searchLabel;
-    input.setAttribute('aria-label', t().searchLabel);
+    input.placeholder = t().searchPlaceholder;
+    input.setAttribute('aria-label', t().searchPlaceholder);
     input.value = query;
-    input.addEventListener('input', () => { query = input.value; });
-    const go = element('button', 'pd-btn pd-btn-main pd-btn-small', t().searchButton);
-    go.type = 'submit';
-    form.append(input, go);
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
+    input.addEventListener('input', () => {
+      query = input.value;
+      clearTimeout(timer);
+      if (query.trim().length < 2) {
+        found = [];
+        searchedFor = '';
+      } else {
+        timer = setTimeout(() => void runSearch(), SEARCH_DELAY_MS);
+      }
+      renderList();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      clearTimeout(timer);
       void runSearch();
     });
+    const managers = element('small');
+    managers.id = 'search-managers';
+    search.append(input, managers);
 
-    const status = element('p', 'hint pkg-status', discoverStatus || (resultMode === 'import' ? '' : t().searchHint));
-    status.setAttribute('role', 'status');
-    const list = element('div', 'pd-window pkg-list');
-    const have = installedKeys();
-    if (resultMode === 'import') {
-      const bar = element('div', 'pd-window-bar');
-      bar.append(element('b', '', t().importTitle), element('span', 'pd-badge pd-badge-plain', String(results.length)));
-      list.append(bar);
-      if (importSkipped) list.append(element('div', 'notes', fill(t().importNote, { count: importSkipped })));
+    const filter = element('div', 'segmented');
+    filter.id = 'package-filter';
+    filter.setAttribute('role', 'group');
+
+    const line = element('p', 'muted progress');
+    line.id = 'package-status';
+    line.setAttribute('role', 'status');
+    const panel = element('div', 'panel glass');
+    panel.id = 'package-list';
+    page.append(head, search, filter, line, panel);
+    renderList();
+  }
+
+  function renderList(): void {
+    const panel = document.getElementById('package-list');
+    const filter = document.getElementById('package-filter');
+    const line = document.getElementById('package-status');
+    const managers = document.getElementById('search-managers');
+    if (!panel || !filter || !line || !managers) return;
+    const all = inventory?.packages ?? [];
+    managers.textContent = (inventory?.managers ?? []).map((manager) => MANAGER_NAMES[manager]).join(' · ');
+    document.getElementById('export-button')?.toggleAttribute('disabled', all.length === 0);
+
+    filter.replaceChildren();
+    const updates = all.filter(hasUpdate).length;
+    for (const [label, value] of [[fill(t().allCount, { count: all.length }), false], [fill(t().withUpdates, { count: updates }), true]] as [string, boolean][]) {
+      const option = element('button', '', label);
+      option.type = 'button';
+      option.setAttribute('aria-pressed', String(onlyUpdates === value));
+      option.addEventListener('click', () => { onlyUpdates = value; renderList(); });
+      filter.append(option);
     }
-    if (searched && resultMode === 'search' && results.length === 0) list.append(element('div', 'notes', t().noResults));
-    for (const entry of results) {
-      const row = element('div', 'pkg-row');
-      const id = key(entry);
-      const isInstalled = have.has(id) || (entry.manager === 'scoop' && have.has(`scoop:${entry.id.split('/').pop()}`));
-      const box = checkbox(found.has(id), entry.name, (checked) => {
-        if (checked) found.add(id);
-        else found.delete(id);
-        render();
-      });
-      box.disabled = isInstalled;
-      const title = element('div', 'pkg-name');
-      title.append(element('span', '', entry.name), element('small', '', `${MANAGER_NAMES[entry.manager]} · ${entry.id}`));
-      const actions = element('div', 'pkg-actions');
-      if (isInstalled) actions.append(element('span', 'pd-badge pd-badge-ok', t().installed));
-      else actions.append(button(t().installOne, 'line', () => void perform('install', [entry], 'discover')));
-      row.append(box, title, element('span', 'pd-ver', entry.version), actions);
-      list.append(row);
+    line.textContent = status;
+
+    panel.replaceChildren();
+    if (inventory && inventory.managers.length === 0) {
+      panel.append(element('div', 'notes', t().noManager));
+      return;
     }
-    const buttons = element('div', 'actions');
-    if (found.size > 0) {
-      const chosen = results.filter((entry) => found.has(key(entry)));
-      const install = button(t().installSelected, 'main', () => void perform('install', chosen, 'discover'));
-      install.disabled = ctx.busy();
-      buttons.append(element('span', 'hint', fill(t().selected, { count: found.size })), install);
+    for (const problem of inventory?.problems ?? []) panel.append(element('div', 'notes', problem));
+
+    if (imported.length > 0 || importSkipped > 0) {
+      const head = element('div', 'list-head row');
+      head.append(element('span', '', fill(t().fromList, { count: imported.length })));
+      if (imported.length > 1) head.append(button(t().installAll, 'main', () => void perform('install', imported)));
+      panel.append(head);
+      if (importSkipped) panel.append(element('div', 'notes', fill(t().importNote, { count: importSkipped })));
+      for (const entry of imported) {
+        const { row: node, acts } = row(entry.name, `${MANAGER_NAMES[entry.manager]} · ${entry.id}`, '', true);
+        acts.append(button(t().installOne, 'main', () => void perform('install', [entry])));
+        panel.append(node);
+      }
     }
-    box.append(form, buttons, status, list);
+
+    const needle = query.trim().toLowerCase();
+    const mine = all.filter((entry) => (!onlyUpdates || hasUpdate(entry)) && (!needle || `${entry.name} ${entry.id}`.toLowerCase().includes(needle)));
+    panel.append(element('div', 'list-head', fill(t().installedTitle, { count: mine.length })));
+    if (!inventory) panel.append(element('div', 'notes', t().loading));
+    else if (mine.length === 0) panel.append(element('div', 'notes', t().noPackages));
+    // Long lists stay fast: the first 400 rows are drawn, the search narrows the rest.
+    for (const entry of mine.slice(0, 400)) {
+      const update = hasUpdate(entry);
+      const { row: node, acts } = row(entry.name, `${MANAGER_NAMES[entry.manager]} · ${entry.id}`, update ? `${entry.version} → ${entry.available}` : entry.version);
+      if (holds().has(entry.id) || holds().has(entry.name)) acts.append(element('span', 'pill pill-wait', t().ignored));
+      else if (entry.available && skippedVersion(entry) === entry.available) acts.append(element('span', 'pill pill-plain', fill(t().skippedNote, { version: entry.available })));
+      if (update) {
+        acts.append(button(t().updateOne, 'main', () => void perform('update', [entry])));
+        acts.append(button(t().skipShort, 'line', async () => {
+          ctx.setSettings(await ctx.api.skip(key(entry), entry.available as string));
+          renderList();
+        }));
+      }
+      acts.append(button(t().uninstallOne, 'line', () => void perform('uninstall', [entry])));
+      panel.append(node);
+    }
+
+    if (needle.length >= 2) {
+      const done = searchedFor === query.trim() && !searching;
+      const title = !done ? t().searching : found.length ? fill(t().availableTitle, { count: found.length }) : t().noResults;
+      panel.append(element('div', 'list-head', title));
+      if (done) {
+        for (const entry of found) {
+          const { row: node, acts } = row(entry.name, `${MANAGER_NAMES[entry.manager]} · ${entry.id}`, entry.version, true);
+          acts.append(button(t().installOne, 'main', () => void perform('install', [entry])));
+          panel.append(node);
+        }
+      }
+    }
   }
 
   // ---------- History ----------
@@ -385,41 +320,41 @@ export function createViews(ctx: ViewContext) {
   const ACTION_LABEL: Record<HistoryEntry['action'], keyof Strings> = { install: 'hInstall', uninstall: 'hUninstall', update: 'hUpdate', run: 'hRun', 'self-update': 'hSelf' };
 
   function renderHistory(): void {
-    const box = document.getElementById('view-history');
-    if (!box) return;
-    box.replaceChildren();
-    const list = element('div', 'pd-window pkg-list');
-    if (history.length === 0) list.append(element('div', 'notes', t().historyEmpty));
+    const page = document.getElementById('page-history');
+    if (!page) return;
+    page.replaceChildren();
+    const head = element('header', 'page-head');
+    const titles = element('div');
+    const h1 = element('h1', '', t().navHistory);
+    h1.id = 'history-title';
+    titles.append(h1, element('p', '', t().historyLead));
+    head.append(titles);
+    const panel = element('div', 'panel glass');
+    if (history.length === 0) panel.append(element('div', 'notes', t().historyEmpty));
     for (const entry of history) {
-      const row = element('div', 'pkg-row pkg-history');
       const when = new Date(entry.at).toLocaleString(t().locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
-      const title = element('div', 'pkg-name');
       const managerName = entry.manager && entry.manager in MANAGER_NAMES ? MANAGER_NAMES[entry.manager as Manager] : '';
-      title.append(element('span', '', entry.name), element('small', '', [t()[ACTION_LABEL[entry.action]] as string, managerName].filter(Boolean).join(' · ')));
-      row.append(element('span', 'pd-ver', when), title, element('span', `pd-badge pd-badge-${entry.ok ? 'ok' : 'back'}`, entry.ok ? t().hOk : t().hFailed));
+      const meta = [t()[ACTION_LABEL[entry.action]] as string, managerName].filter(Boolean).join(' · ');
+      const { row: node, acts } = row(entry.name, meta, when);
+      acts.append(element('span', `pill pill-${entry.ok ? 'ok' : 'back'}`, entry.ok ? t().hOk : t().hFailed));
       if (entry.detail) {
         const more = element('details', 'pd-detail');
         more.append(element('summary', '', t().details), element('pre', '', entry.detail));
-        row.append(more);
+        node.append(more);
       }
-      list.append(row);
+      panel.append(node);
     }
-    box.append(list, element('p', 'hint', t().historyLimit));
-  }
-
-  function render(): void {
-    renderPackages();
-    renderDiscover();
-    renderHistory();
+    page.append(head, panel);
   }
 
   return {
-    render,
-    open(tab: string): void {
-      if (tab === 'packages' && !inventory && !loading) void loadPackages();
-      if (tab === 'discover' && !inventory && !loading) void loadPackages();
-      if (tab === 'history') void loadHistory();
-      render();
+    render(): void {
+      renderPackages();
+      renderHistory();
+    },
+    open(page: string): void {
+      if (page === 'packages' && !inventory && !loading) void loadPackages();
+      if (page === 'history') void loadHistory();
     },
   };
 }

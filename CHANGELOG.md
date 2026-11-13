@@ -17,6 +17,9 @@ All notable changes to Patchday are listed here. Versions follow [semantic versi
 
 ### Changed
 
+- New light design in layered glass. A sidebar leads to Overview, Updates, Packages, Schedule and History, and every page follows the same pattern. The colored ground moves slightly with the pointer, and stays still when the system asks for reduced motion.
+- Installed packages and the search for new ones share one page and one search field.
+- The dark theme is gone.
 - Scheduled runs leave skipped versions alone.
 
 ### Security

@@ -4,7 +4,6 @@ import { reason, STRINGS, type Language } from './i18n.ts';
 import { createViews, type PackageApi } from './views.ts';
 
 interface Api extends PackageApi {
-  onSelfReady(listener: (version: string) => void): void;
   state(): Promise<{ settings: Settings; reports: Report[]; version: string; platform: string; hasToken: boolean; adminReady: boolean; packaged: boolean }>;
   saveSettings(patch: Partial<Settings>): Promise<Settings>;
   check(): Promise<Report>;
@@ -17,6 +16,7 @@ interface Api extends PackageApi {
   installSelf(): Promise<void>;
   onSelfProgress(listener: (percent: number) => void): void;
   onSelfAvailable(listener: (version: string) => void): void;
+  onSelfReady(listener: (version: string) => void): void;
   onProgress(listener: (items: ProgressItem[]) => void): void;
   onLog(listener: (message: string) => void): void;
 }
@@ -27,18 +27,23 @@ declare global {
   }
 }
 
+type Page = 'overview' | 'updates' | 'packages' | 'schedule' | 'history';
+const PAGES: Page[] = ['overview', 'updates', 'packages', 'schedule', 'history'];
+
 const api = window.patchday;
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const all = <T extends HTMLElement>(selector: string) => [...document.querySelectorAll<T>(selector)];
 const element = (tag: string, className: string, text = '') => {
   const node = document.createElement(tag);
   node.className = className;
   node.textContent = text;
   return node;
 };
+const fill = (text: string, values: Record<string, string | number>) => text.replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ''));
 
 let settings: Settings;
 let hasToken = false;
-let report: Report | null = null;
+let reports: Report[] = [];
 let busy = false;
 let live: ProgressItem[] | null = null;
 let adminReady = false;
@@ -46,49 +51,67 @@ let adminMessage = '';
 let selfVersion: string | null = null;
 let selfMessage = '';
 let selfReady = false;
-type Tab = 'updates' | 'packages' | 'discover' | 'history';
-let tab: Tab = 'updates';
+let packaged = false;
+let page: Page = 'overview';
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 const t = () => STRINGS[settings.language as Language];
+const language = () => settings.language as Language;
+const report = () => reports[0] ?? null;
 
-const BADGE: Record<ReportItem['outcome'], [string, keyof typeof STRINGS.en]> = {
+const SOURCE: Record<ReportItem['source'], string> = { docker: 'Container', brew: 'Homebrew', winget: 'winget', choco: 'Chocolatey', scoop: 'Scoop' };
+const PILL: Record<ReportItem['outcome'], [string, keyof typeof STRINGS.en]> = {
   planned: ['plain', 'bPlanned'],
   applied: ['ok', 'bApplied'],
   waiting: ['wait', 'bWaiting'],
   'rolled-back': ['back', 'bBack'],
   failed: ['back', 'bFailed'],
 };
-const ORDER: ReportItem['outcome'][] = ['failed', 'rolled-back', 'waiting', 'planned', 'applied'];
+const PHASES = { backup: 'phaseBackup', update: 'phaseUpdate', test: 'phaseTest', rollback: 'phaseRollback', retry: 'phaseRetry' } as const;
+
+const formatWhen = (iso: string) => new Date(iso).toLocaleString(t().locale, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
+const count = (items: ReportItem[], ...outcomes: ReportItem['outcome'][]) => items.filter((item) => outcomes.includes(item.outcome)).length;
 
 function bar(tone: 'ok' | 'fail' | 'active' | 'busy', percent: number | null, label: string): HTMLElement {
-  const track = element('div', `pd-progress pd-progress-${tone}`);
+  const track = element('div', `pd-progress pd-progress-${tone} bar`);
   track.setAttribute('role', 'progressbar');
   track.setAttribute('aria-label', label);
   if (percent !== null) track.setAttribute('aria-valuenow', String(percent));
-  const fill = element('span', '');
-  if (percent !== null) fill.style.width = `${percent}%`;
-  track.append(fill);
+  const inner = element('span', '');
+  if (percent !== null) inner.style.width = `${percent}%`;
+  track.append(inner);
   return track;
 }
 
-const PHASES = { backup: 'phaseBackup', update: 'phaseUpdate', test: 'phaseTest', rollback: 'phaseRollback', retry: 'phaseRetry' } as const;
+// Same anatomy as every other list: icon, name with source, version, status.
+function item(name: string, meta: string, version: string, pill: HTMLElement): HTMLElement {
+  const row = element('div', 'item');
+  const icon = element('span', 'icon', (name.trim()[0] ?? '?').toUpperCase());
+  icon.setAttribute('aria-hidden', 'true');
+  const title = element('div', 'name');
+  title.append(element('span', '', name), element('small', '', meta));
+  const ver = element('span', 'ver', version);
+  ver.title = version;
+  const acts = element('div', 'acts');
+  acts.append(pill);
+  row.append(icon, title, ver, acts);
+  return row;
+}
+
+// ---------- Updates ----------
 
 function renderLive(box: HTMLElement, items: ProgressItem[]): void {
-  const language = settings.language as Language;
-  const finished = items.filter((item) => item.state === 'done' || item.state === 'failed').length;
-  const head = element('div', 'pd-window-bar');
-  head.append(element('b', '', t().updating), element('span', 'pd-badge pd-badge-plain', `${finished} / ${items.length}`));
+  const finished = items.filter((entry) => entry.state === 'done' || entry.state === 'failed').length;
   const total = element('div', 'overall');
   const share = items.length ? Math.round((finished / items.length) * 100) : 0;
-  total.append(bar('active', share, t().overall), element('span', 'pd-reason', `${finished} / ${items.length} ${t().overall}`));
-  box.append(head, total);
-  for (const item of items) {
-    const row = element('div', 'pd-report-row');
-    const tone = item.state === 'failed' ? 'fail' : item.state === 'done' ? 'ok' : item.percent === null ? 'busy' : 'active';
-    const label = item.state === 'done' ? t().bApplied : item.state === 'failed' ? t().bFailed : item.phase ? t()[PHASES[item.phase]] : t().queued;
-    const badge = item.state === 'done' ? 'ok' : item.state === 'failed' ? 'back' : 'plain';
-    row.append(element('span', '', item.name), element('span', 'pd-ver', `${item.from} → ${item.to}`), element('span', `pd-badge pd-badge-${badge}`, label), bar(tone, item.percent, item.name));
-    if (item.reason) row.append(element('span', 'pd-reason', reason(language, item.reason)));
+  total.append(element('span', 'muted', `${t().updating} ${finished} / ${items.length} ${t().overall}`), bar('active', share, t().overall));
+  box.append(total);
+  for (const entry of items) {
+    const tone = entry.state === 'failed' ? 'fail' : entry.state === 'done' ? 'ok' : entry.percent === null ? 'busy' : 'active';
+    const label = entry.state === 'done' ? t().bApplied : entry.state === 'failed' ? t().bFailed : entry.phase ? t()[PHASES[entry.phase]] : t().queued;
+    const pill = element('span', `pill pill-${entry.state === 'done' ? 'ok' : entry.state === 'failed' ? 'back' : 'plain'}`, label);
+    const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, pill);
+    row.append(bar(tone, entry.percent, entry.name));
+    if (entry.reason) row.append(element('span', 'reason', reason(language(), entry.reason)));
     box.append(row);
   }
 }
@@ -96,62 +119,125 @@ function renderLive(box: HTMLElement, items: ProgressItem[]): void {
 function renderReport(): void {
   const box = $('report');
   box.replaceChildren();
+  const current = report();
+  $('updates-lead').textContent = current
+    ? fill(t().updatesLead, { count: count(current.items, 'planned', 'waiting'), when: formatWhen(current.startedAt) })
+    : t().updatesLeadNone;
   if (live) {
     renderLive(box, live);
     return;
   }
-  if (!report) {
+  if (!current) {
     const empty = element('div', 'empty');
     empty.append(element('h2', '', t().emptyTitle), element('p', '', t().emptyText));
     box.append(empty);
     return;
   }
-  const started = new Date(report.startedAt);
-  const titleBar = element('div', 'pd-window-bar');
-  titleBar.append(
-    element('b', '', started.toLocaleString(t().locale, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false })),
-    element('span', 'pd-badge pd-badge-plain', report.mode === 'preview' ? t().preview : t().run),
-  );
-  const count = (...outcomes: ReportItem['outcome'][]) => report!.items.filter((item) => outcomes.includes(item.outcome)).length;
-  const tally = element('div', 'pd-tally');
-  const first: [number, string] = report.mode === 'preview' ? [count('planned'), t().planned] : [count('applied'), t().applied];
-  for (const [value, label] of [first, [count('waiting'), t().waiting], [count('failed', 'rolled-back'), t().problems]] as [number, string][]) {
-    const cell = element('div', '');
-    cell.append(element('b', '', String(value)), element('span', '', label));
-    tally.append(cell);
-  }
-  box.append(titleBar, tally);
-  if (report.items.length === 0) box.append(element('div', 'notes', t().upToDate));
-  const language = settings.language as Language;
-  const sorted = [...report.items].sort((a, b) => ORDER.indexOf(a.outcome) - ORDER.indexOf(b.outcome));
-  for (const item of sorted) {
-    const [tone, label] = BADGE[item.outcome];
-    const row = element('div', 'pd-report-row');
-    row.append(
-      element('span', '', item.name),
-      element('span', 'pd-ver', `${item.from} → ${item.to}`),
-      element('span', `pd-badge pd-badge-${tone}`, t()[label] as string),
-    );
-    if (report.mode === 'apply' && item.outcome !== 'waiting') row.append(bar(item.outcome === 'applied' ? 'ok' : 'fail', 100, item.name));
-    row.append(element('span', 'pd-reason', reason(language, item.reason)));
-    if (item.detail) {
-      const more = element('details', 'pd-detail');
-      more.append(element('summary', '', t().details), element('pre', '', item.detail));
-      row.append(more);
+  if (current.items.length === 0) box.append(element('div', 'notes', t().upToDate));
+  const groups: [ReportItem['outcome'][], keyof typeof STRINGS.en][] = [
+    [['waiting'], 'groupWaiting'],
+    [['failed', 'rolled-back'], 'groupProblems'],
+    [['planned'], 'groupPlanned'],
+    [['applied'], 'groupApplied'],
+  ];
+  for (const [outcomes, label] of groups) {
+    const members = current.items.filter((entry) => outcomes.includes(entry.outcome));
+    if (members.length === 0) continue;
+    box.append(element('div', 'list-head', fill(t()[label] as string, { count: members.length })));
+    for (const entry of members) {
+      const [tone, text] = PILL[entry.outcome];
+      const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, element('span', `pill pill-${tone}`, t()[text] as string));
+      if (entry.reason) row.append(element('span', 'reason', reason(language(), entry.reason)));
+      if (entry.detail) {
+        const more = element('details', 'pd-detail');
+        more.append(element('summary', '', t().details), element('pre', '', entry.detail));
+        row.append(more);
+      }
+      box.append(row);
     }
-    box.append(row);
   }
-  for (const note of report.notes) box.append(element('div', 'notes', note));
+  for (const note of current.notes) box.append(element('div', 'notes', note));
 }
 
-function renderHint(): void {
+// ---------- Overview ----------
+
+function scheduleDay(hour: number): number {
+  return (Math.floor(hour / 24) + 1) % 7;
+}
+
+function nextRunText(): string {
   const hour = settings.hourOfWeek;
-  $('hint').textContent = hour % 24 < 6 ? t().noteNight : t().noteDay;
-  const day = (Math.floor(hour / 24) + 1) % 7;
-  const next = nextRun({ enabled: settings.scheduleEnabled, days: [day], hour: hour % 24, minute: 0 }, new Date());
-  $('next').textContent = next
-    ? `${t().next} ${next.toLocaleDateString(t().locale, { weekday: 'long', day: 'numeric', month: 'long' })} ${t().at} ${String(hour % 24).padStart(2, '0')}:00`
-    : t().off;
+  const next = nextRun({ enabled: settings.scheduleEnabled, days: [scheduleDay(hour)], hour: hour % 24, minute: 0 }, new Date());
+  return next ? `${next.toLocaleDateString(t().locale, { weekday: 'long', day: 'numeric', month: 'long' })} ${t().at} ${String(hour % 24).padStart(2, '0')}:00` : t().off;
+}
+
+function renderOverview(): void {
+  const current = report();
+  const planned = current?.mode === 'preview' ? count(current.items, 'planned') : 0;
+  const waiting = current ? count(current.items, 'waiting') : 0;
+  const ready = planned + waiting;
+  $('hero-when').textContent = current ? fill(t().checkedAt, { when: formatWhen(current.startedAt) }) : t().notChecked;
+  const title = planned === 0 && waiting > 0 ? (waiting === 1 ? t().heroWaitOne : fill(t().heroWaiting, { count: waiting })) : ready === 1 ? t().heroOne : fill(t().heroCount, { count: ready });
+  $('hero-title').textContent = !current ? t().heroNoCheck : ready === 0 ? t().heroClear : title;
+  const text = waiting === 0 ? t().heroTextAuto : planned === 0 ? t().heroTextWait : t().heroText;
+  $('hero-text').textContent = !current ? t().heroTextNoCheck : ready === 0 ? t().heroTextClear : fill(text, { auto: planned, wait: waiting });
+  $<HTMLButtonElement>('hero-update').disabled = busy || planned === 0;
+  const nav = $('nav-count');
+  nav.hidden = ready === 0;
+  nav.textContent = String(ready);
+
+  const hour = settings.hourOfWeek;
+  $('mini-hand').style.transform = `rotate(${(hour / 168) * 360}deg)`;
+  $('mini-day').textContent = t().days[Math.floor(hour / 24)];
+  $('mini-time').textContent = `${String(hour % 24).padStart(2, '0')}:00`;
+
+  $('card-next').textContent = nextRunText();
+  const lastRun = reports.find((entry) => entry.mode === 'apply');
+  $('card-last').textContent = lastRun ? new Date(lastRun.startedAt).toLocaleDateString(t().locale, { weekday: 'long', day: 'numeric', month: 'long' }) : t().lastNone;
+  const pills = $('card-last-pills');
+  pills.replaceChildren();
+  if (lastRun) {
+    const applied = count(lastRun.items, 'applied');
+    const problems = count(lastRun.items, 'failed', 'rolled-back');
+    pills.append(element('span', 'pill pill-ok', `${applied} ${t().applied}`));
+    if (problems) pills.append(element('span', 'pill pill-back', `${problems} ${t().problems}`));
+  }
+  const first = current?.items.find((entry) => entry.outcome === 'waiting');
+  $('card-wait').textContent = first ? first.name : t().waitNone;
+  $('card-wait-text').textContent = first
+    ? [`${first.from} → ${first.to}: ${reason(language(), first.reason)}.`, waiting > 1 ? fill(t().waitMore, { count: waiting - 1 }) : ''].filter(Boolean).join(' ')
+    : t().waitNoneText;
+}
+
+// ---------- Schedule ----------
+
+function setSwitch(id: string, on: boolean): void {
+  $(id).setAttribute('aria-checked', String(on));
+}
+
+function renderSchedule(): void {
+  const hour = settings.hourOfWeek;
+  const night = hour % 24 < 6;
+  const hint = $('hint');
+  hint.textContent = night ? t().noteNight : t().noteDay;
+  hint.className = `note ${night ? 'night' : 'day'}`;
+  $('next').textContent = settings.scheduleEnabled ? `${t().next} ${nextRunText()}` : t().off;
+  setSwitch('enabled', settings.scheduleEnabled);
+  setSwitch('enabled-quick', settings.scheduleEnabled);
+  setSwitch('apply', settings.applyUpdates);
+  setSwitch('minor', settings.autoMinor);
+  setSwitch('auto-self', settings.autoSelfUpdate);
+  const chips = $('holds');
+  chips.replaceChildren();
+  for (const name of settings.holds) {
+    const chip = element('span', 'chip', name);
+    const remove = element('button', '', '×');
+    (remove as HTMLButtonElement).type = 'button';
+    remove.setAttribute('aria-label', fill(t().removeHold, { name }));
+    remove.addEventListener('click', () => void patch({ holds: settings.holds.filter((entry) => entry !== name) }).then(renderAll));
+    chip.append(remove);
+    chips.append(chip);
+  }
 }
 
 function mountDial(): void {
@@ -160,7 +246,6 @@ function mountDial(): void {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'pd-dial');
   svg.setAttribute('viewBox', '0 0 600 600');
-  svg.setAttribute('role', 'img');
   svg.setAttribute('aria-hidden', 'true');
   const label = element('label', 'dial-label', t().pick);
   const input = document.createElement('input');
@@ -176,7 +261,8 @@ function mountDial(): void {
     short: t().short,
     onChange(hour) {
       settings.hourOfWeek = hour;
-      renderHint();
+      renderSchedule();
+      renderOverview();
       // The system scheduler is only rewritten once the hand rests.
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => void api.saveSettings({ hourOfWeek: hour }), 500);
@@ -184,16 +270,14 @@ function mountDial(): void {
   });
 }
 
+// ---------- Shell ----------
+
 function renderText(): void {
   document.documentElement.lang = settings.language;
-  document.documentElement.dataset.theme = settings.theme;
-  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((node) => {
+  all('[data-i18n]').forEach((node) => {
     node.textContent = t()[node.dataset.i18n as keyof typeof STRINGS.en] as string;
   });
-  document.querySelectorAll<HTMLElement>('[data-lang]').forEach((node) => {
-    node.setAttribute('aria-pressed', String(node.dataset.lang === settings.language));
-  });
-  $('theme').setAttribute('aria-label', settings.theme === 'light' ? t().toDark : t().toLight);
+  all('[data-lang]').forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.lang === settings.language)));
   $('coffee').setAttribute('aria-label', t().coffee);
   $('token-state').textContent = hasToken ? t().tokenSaved : t().tokenNone;
   $('admin-state').textContent = adminMessage || (adminReady ? t().adminOn : t().adminOff);
@@ -201,13 +285,53 @@ function renderText(): void {
   $('self-update').hidden = !selfVersion && !selfMessage;
   $('self-text').textContent = selfMessage || (t()[selfReady ? 'selfReady' : 'selfAvailable'] as string).replace('{version}', selfVersion ?? '');
   $('self-restart').hidden = !selfReady || Boolean(selfMessage);
-  document.querySelectorAll<HTMLElement>('[data-tab]').forEach((node) => {
-    const active = node.dataset.tab === tab;
-    node.setAttribute('aria-selected', String(active));
-    node.tabIndex = active ? 0 : -1;
+  all<HTMLButtonElement>('[data-page]').forEach((node) => {
+    if (node.dataset.page === page) node.setAttribute('aria-current', 'page');
+    else node.removeAttribute('aria-current');
   });
-  for (const name of ['updates', 'packages', 'discover', 'history'] as Tab[]) $(`view-${name}`).hidden = name !== tab;
-  $('self-update-button').className = `pd-btn ${selfVersion ? 'pd-btn-main' : 'pd-btn-line'}`;
+  for (const name of PAGES) $(`page-${name}`).hidden = name !== page;
+}
+
+function renderAll(): void {
+  renderText();
+  mountDial();
+  renderSchedule();
+  renderOverview();
+  renderReport();
+  views.render();
+}
+
+function showPage(next: Page): void {
+  page = next;
+  renderText();
+  views.open(next);
+}
+
+function setBusy(label: string): void {
+  busy = Boolean(label);
+  $('progress').textContent = label;
+  all<HTMLButtonElement>('[data-action]').forEach((node) => { node.disabled = busy; });
+  if (!busy) renderOverview();
+}
+
+async function perform(action: () => Promise<Report>, label: string): Promise<void> {
+  if (busy) return;
+  setBusy(label);
+  try {
+    reports = [await action(), ...reports];
+    live = null;
+    setBusy('');
+  } catch (error) {
+    live = null;
+    setBusy('');
+    $('progress').textContent = `${t().failedRun} ${(error as Error).message}`;
+  }
+  renderReport();
+  renderOverview();
+}
+
+async function patch(values: Partial<Settings>): Promise<void> {
+  settings = await api.saveSettings(values);
 }
 
 const ask = (title: string, text: string, yes: string): Promise<boolean> =>
@@ -229,57 +353,35 @@ const ask = (title: string, text: string, yes: string): Promise<boolean> =>
     dialog.showModal();
   });
 
-function showTab(next: Tab): void {
-  tab = next;
-  renderText();
-  views.open(next);
-}
-
 const views = createViews({
   api,
   t,
   settings: () => settings,
-  patch: (values) => patch(values),
-  setSettings: (next) => { settings = next; },
+  setSettings: (next) => { settings = next; renderOverview(); },
   busy: () => busy,
   setBusy: (label) => setBusy(label),
   ask,
-  showTab,
 });
 
-function renderAll(): void {
-  renderText();
-  mountDial();
-  renderHint();
-  renderReport();
-  views.render();
-}
-
-function setBusy(label: string): void {
-  busy = Boolean(label);
-  $('progress').textContent = label;
-  $<HTMLButtonElement>('check').disabled = busy;
-  $<HTMLButtonElement>('update').disabled = busy;
-}
-
-async function perform(action: () => Promise<Report>, label: string): Promise<void> {
-  if (busy) return;
-  setBusy(label);
-  try {
-    report = await action();
-    live = null;
-    renderReport();
-    setBusy('');
-  } catch (error) {
-    live = null;
-    renderReport();
-    setBusy('');
-    $('progress').textContent = `${t().failedRun} ${(error as Error).message}`;
-  }
-}
-
-async function patch(values: Partial<Settings>): Promise<void> {
-  settings = await api.saveSettings(values);
+// The colored ground drifts against the pointer; the glass above it stays still.
+function startParallax(): void {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const root = document.documentElement;
+  let frame = 0;
+  let x = 0;
+  let y = 0;
+  const apply = () => {
+    frame = 0;
+    root.style.setProperty('--px', x.toFixed(3));
+    root.style.setProperty('--py', y.toFixed(3));
+  };
+  const queue = () => { if (!frame) frame = requestAnimationFrame(apply); };
+  window.addEventListener('pointermove', (event) => {
+    x = (event.clientX / window.innerWidth) * 2 - 1;
+    y = (event.clientY / window.innerHeight) * 2 - 1;
+    queue();
+  });
+  document.documentElement.addEventListener('pointerleave', () => { x = 0; y = 0; queue(); });
 }
 
 async function start(): Promise<void> {
@@ -287,42 +389,42 @@ async function start(): Promise<void> {
   settings = state.settings;
   hasToken = state.hasToken;
   adminReady = state.adminReady;
-  report = state.reports[0] ?? null;
-  $('version').textContent = state.version;
-  $<HTMLInputElement>('enabled').checked = settings.scheduleEnabled;
-  $<HTMLInputElement>('apply').checked = settings.applyUpdates;
-  $<HTMLInputElement>('minor').checked = settings.autoMinor;
-  $<HTMLInputElement>('auto-self').checked = settings.autoSelfUpdate;
-  $<HTMLInputElement>('holds').value = settings.holds.join(', ');
+  packaged = state.packaged;
+  reports = state.reports;
   $<HTMLInputElement>('portainer-url').value = settings.portainerUrl;
   renderAll();
+  $('version').textContent = `${state.version}`;
+  startParallax();
 
-  document.querySelectorAll<HTMLElement>('[data-lang]').forEach((node) => {
+  all('[data-page]').forEach((node) => node.addEventListener('click', () => showPage(node.dataset.page as Page)));
+  all('[data-goto]').forEach((node) => node.addEventListener('click', () => showPage(node.dataset.goto as Page)));
+  all('[data-lang]').forEach((node) => {
     node.addEventListener('click', async () => { await patch({ language: node.dataset.lang as Language }); renderAll(); });
   });
-  $('theme').addEventListener('click', async () => { await patch({ theme: settings.theme === 'light' ? 'dark' : 'light' }); renderText(); });
   $('coffee').addEventListener('click', () => void api.coffee());
-  $('enabled').addEventListener('change', async (event) => {
-    await patch({ scheduleEnabled: (event.target as HTMLInputElement).checked });
-    renderHint();
-  });
-  $('apply').addEventListener('change', (event) => void patch({ applyUpdates: (event.target as HTMLInputElement).checked }));
-  $('minor').addEventListener('change', (event) => void patch({ autoMinor: (event.target as HTMLInputElement).checked }));
-  $('auto-self').addEventListener('change', (event) => void patch({ autoSelfUpdate: (event.target as HTMLInputElement).checked }));
-  const tabs = [...document.querySelectorAll<HTMLElement>('[data-tab]')];
-  tabs.forEach((node, index) => {
-    node.addEventListener('click', () => showTab(node.dataset.tab as Tab));
-    node.addEventListener('keydown', (event) => {
-      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
-      if (!step) return;
-      const next = tabs[(index + step + tabs.length) % tabs.length];
-      showTab(next.dataset.tab as Tab);
-      next.focus();
+
+  const toggle = (id: string, read: () => boolean, write: (on: boolean) => Partial<Settings>) => {
+    $(id).addEventListener('click', async () => {
+      await patch(write(!read()));
+      renderSchedule();
+      renderOverview();
     });
+  };
+  toggle('enabled', () => settings.scheduleEnabled, (on) => ({ scheduleEnabled: on }));
+  toggle('enabled-quick', () => settings.scheduleEnabled, (on) => ({ scheduleEnabled: on }));
+  toggle('apply', () => settings.applyUpdates, (on) => ({ applyUpdates: on }));
+  toggle('minor', () => settings.autoMinor, (on) => ({ autoMinor: on }));
+  toggle('auto-self', () => settings.autoSelfUpdate, (on) => ({ autoSelfUpdate: on }));
+  $('hold-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const field = $<HTMLInputElement>('hold-input');
+    const name = field.value.trim();
+    if (!name || settings.holds.includes(name)) return;
+    await patch({ holds: [...settings.holds, name] });
+    field.value = '';
+    renderAll();
   });
-  $('holds').addEventListener('change', (event) => {
-    void patch({ holds: (event.target as HTMLInputElement).value.split(',').map((name) => name.trim()).filter(Boolean) });
-  });
+
   $('portainer-url').addEventListener('change', (event) => void patch({ portainerUrl: (event.target as HTMLInputElement).value.trim() }));
   $('save-token').addEventListener('click', async () => {
     const field = $<HTMLInputElement>('portainer-token');
@@ -335,12 +437,22 @@ async function start(): Promise<void> {
   const settingsDialog = $<HTMLDialogElement>('settings');
   $('settings-open').addEventListener('click', () => settingsDialog.showModal());
   $('settings-close').addEventListener('click', () => settingsDialog.close());
-  $('check').addEventListener('click', () => void perform(api.check, t().checking));
-  const dialog = $<HTMLDialogElement>('confirm');
-  $('update').addEventListener('click', () => dialog.showModal());
-  $('confirm-no').addEventListener('click', () => dialog.close());
+
+  const confirm = $<HTMLDialogElement>('confirm');
+  all('[data-action]').forEach((node) => {
+    node.addEventListener('click', () => {
+      if (node.dataset.action === 'check') {
+        showPage('updates');
+        void perform(api.check, t().checking);
+      } else {
+        confirm.showModal();
+      }
+    });
+  });
+  $('confirm-no').addEventListener('click', () => confirm.close());
   $('confirm-yes').addEventListener('click', () => {
-    dialog.close();
+    confirm.close();
+    showPage('updates');
     void perform(api.update, t().updating);
   });
   api.onLog((message) => { $('progress').textContent = message; });
@@ -358,33 +470,34 @@ async function start(): Promise<void> {
     selfReady = true;
     showSelf(version);
   });
-  $('self-restart').addEventListener('click', async () => {
-    selfMessage = t().selfRunning;
-    renderText();
-    try {
-      await api.installSelf();
-    } catch (error) {
-      const text = (error as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
-      selfMessage = `${t().selfFailed} ${reason(settings.language as Language, text)}`;
-      renderText();
-    }
-  });
   api.onSelfProgress((percent) => {
     const track = $('self-bar');
     track.hidden = false;
     track.setAttribute('aria-valuenow', String(percent));
     (track.firstElementChild as HTMLElement).style.width = `${percent}%`;
   });
+  const failed = (error: unknown) => {
+    const text = (error as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+    selfMessage = `${t().selfFailed} ${reason(language(), text)}`;
+    $('self-bar').hidden = true;
+    renderText();
+  };
+  $('self-restart').addEventListener('click', async () => {
+    selfMessage = t().selfRunning;
+    renderText();
+    await api.installSelf().catch(failed);
+  });
   $('self-update-button').addEventListener('click', async () => {
     const button = $<HTMLButtonElement>('self-update-button');
     button.disabled = true;
+    showPage('overview');
     selfMessage = t().selfChecking;
     renderText();
     try {
       const version = await api.manualCheckSelf();
       if (!version) {
         selfVersion = null;
-        selfMessage = state.packaged ? (t().selfCurrent as string).replace('{version}', state.version) : t().selfDev;
+        selfMessage = packaged ? (t().selfCurrent as string).replace('{version}', state.version) : t().selfDev;
         button.disabled = false;
         renderText();
         return;
@@ -395,10 +508,7 @@ async function start(): Promise<void> {
       await api.installSelf();
     } catch (error) {
       button.disabled = false;
-      $('self-bar').hidden = true;
-      const text = (error as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
-      selfMessage = `${t().selfFailed} ${reason(settings.language as Language, text)}`;
-      renderText();
+      failed(error);
     }
   });
   void api.checkSelf().then(showSelf).catch(() => {});

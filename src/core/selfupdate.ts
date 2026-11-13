@@ -69,3 +69,12 @@ if mv "$2" "$backup"; then
 fi
 open "$2"
 `;
+
+export const SELF_CHECK_HOURS = 24;
+
+// True when the last automatic check is older than the interval, or never happened.
+export function selfCheckDue(lastCheck: string | undefined, now: Date, hours = SELF_CHECK_HOURS): boolean {
+  if (!lastCheck) return true;
+  const last = new Date(lastCheck).getTime();
+  return Number.isNaN(last) || now.getTime() - last >= hours * 3_600_000 || last > now.getTime();
+}

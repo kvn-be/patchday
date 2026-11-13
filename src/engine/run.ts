@@ -6,6 +6,7 @@ import { diagnoseBrew, diagnoseChoco, diagnoseWinget, type Diagnosis } from '../
 import { decide, type Decision } from '../core/policy.ts';
 import { latestTag } from '../core/version.ts';
 import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
+import { WINGET_FLAGS, wingetTarget } from '../core/packages.ts';
 import type { PortainerClient, PortainerStack } from './portainer.ts';
 import type { Exec, ExecResult, ItemSource, Phase, ProgressItem, Report, ReportItem, Settings } from './types.ts';
 
@@ -337,18 +338,12 @@ async function applyBrew(deps: Deps, tracker: Tracker, open: OutdatedPackage[], 
   });
 }
 
-const WINGET_FLAGS = ['--accept-source-agreements', '--disable-interactivity'];
 
 async function listWinget(deps: Deps, settings: Settings): Promise<WingetPackage[]> {
   const result = await deps.exec('winget', ['upgrade', ...WINGET_FLAGS], { timeoutMs: 5 * 60_000 });
   return parseWingetUpgrade(result.stdout).filter((entry) => !settings.holds.includes(entry.id) && !settings.holds.includes(entry.name) && entry.id !== 'kvn-be.Patchday');
 }
 
-// winget shortens long ids in its table. A shortened id cannot match exactly, so it is matched by prefix.
-function wingetTarget(id: string): string[] {
-  const short = id.replace(/(…|\.\.\.|\uFFFD+|\?)$/, '');
-  return short === id ? ['--id', id, '--exact'] : ['--id', short];
-}
 
 async function applyWinget(deps: Deps, tracker: Tracker, open: WingetPackage[], settings: Settings): Promise<ReportItem[]> {
   // Chocolatey ran first and may have updated the same apps.

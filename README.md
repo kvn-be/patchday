@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/overview.png" alt="Patchday showing the week dial and an update report" width="860">
+  <img src="docs/images/overview.png" alt="Patchday overview with ready updates, next run and last run" width="860">
 </p>
 
 <p align="center"><sub>Screenshots use sample data.</sub></p>
@@ -58,11 +58,12 @@
 - **Fix common failures.** Busy apps, bad downloads and network errors are retried once automatically.
 - **Update itself.** Patchday checks once a day, downloads a new version in the background and installs it when you close it. You can turn this off.
 - **Allow admin rights once.** On Windows, one confirmation replaces a prompt for every app.
-- **English and German.** Dark by default, with a light theme.
+- **Easy to find your way.** A sidebar with five places, and every page built the same way.
+- **English and German.** A light design in layered glass.
 
 <p align="center">
-  <img src="docs/images/week-dial.png" alt="Week dial set to Sunday at 03:00" width="420">
-  <img src="docs/images/light-german.png" alt="Patchday in the light theme and in German" width="420">
+  <img src="docs/images/schedule.png" alt="Schedule page with the week dial set to Sunday at 03:00" width="420">
+  <img src="docs/images/german.png" alt="Patchday overview in German" width="420">
 </p>
 
 ## Install
@@ -97,7 +98,7 @@ A Homebrew tap is planned but not available yet.
 To update right away, select **Update now** and confirm. Containers and apps may restart.
 
 <p align="center">
-  <img src="docs/images/report.png" alt="Report with applied, waiting and rolled back updates" width="640">
+  <img src="docs/images/updates.png" alt="Updates page with one update waiting and six planned" width="640">
 </p>
 
 | Status | Meaning |
@@ -143,6 +144,10 @@ Image tags keep their scheme: `1.2.3-alpine` only moves to another `-alpine` tag
 
 ## Manage packages
 
+<p align="center">
+  <img src="docs/images/packages.png" alt="Packages page: one search shows installed packages and packages to install" width="640">
+</p>
+
 A sidebar leads to five places: **Overview**, **Updates**, **Packages**, **Schedule** and **History**. Every page has its title, one sentence on what it does, and its main action at the top right.
 
 | Page | What you can do |
@@ -172,10 +177,6 @@ Installs and removals you start yourself run in your own user account, never thr
 While Portainer is running and no token is saved, stacks that might belong to it only get suggestions. Self-signed certificates are accepted for local addresses only. Stacks deployed from Git are never changed.
 
 ## Settings
-
-<p align="center">
-  <img src="docs/images/settings.png" alt="Patchday settings" width="520">
-</p>
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -252,7 +253,7 @@ src/
   main/       Electron main process and system scheduler
   renderer/   The user interface
   cli/        Read-only scan command
-design/       Design system and landing page
+design/       Design system
 scripts/      Build script
 ```
 

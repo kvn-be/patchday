@@ -89,13 +89,13 @@ A Homebrew tap is planned but not available yet.
 
 ## Get started
 
-1. Select **Check now**. Patchday lists what would change, and nothing is installed.
-2. Read the list. **Planned** would run automatically, **Waiting for you** would not.
-3. Pick a time on the dial. The arcs mark the quiet hours from 00:00 to 06:00.
+1. On **Overview**, select **Check now**. Patchday lists what would change, and nothing is installed.
+2. Open **Updates** and read the list. **Planned** would run automatically, **Waiting for you** would not.
+3. Open **Schedule** and pick a time on the dial. The arcs mark the quiet hours from 00:00 to 06:00.
 4. Turn on **Run on this schedule**. Scheduled runs now report what would change.
-5. When you trust the results, select **Settings** and turn on **Install updates on schedule**.
+5. When you trust the results, turn on **Install updates on schedule** on the same page.
 
-To update right away, select **Update now** and confirm. Containers and apps may restart.
+To update right away, select **Update all** and confirm. Containers and apps may restart.
 
 <p align="center">
   <img src="docs/images/updates.png" alt="Updates page with one update waiting and six planned" width="640">
@@ -266,7 +266,7 @@ scripts/      Build script
 - Versions before 0.2.0 cannot update themselves, so install 0.2.0 by hand once.
 - Scheduled runs on Windows, the admin task and winget support have had little real-world testing.
 - Homebrew, winget, Chocolatey and Scoop report no percentage, so their bars show activity until a package is finished.
-- Scoop and the package tabs on Windows have had little real-world testing.
+- Scoop and the **Packages** page on Windows have had little real-world testing.
 - Package details such as publisher, download size or install options, and installing a specific older version, are not available yet.
 - With the admin task set up, scheduled runs also update Scoop apps with admin rights. Scoop warns about that but works.
 - Some installers refuse to run as administrator. They show that as the reason.

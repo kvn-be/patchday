@@ -208,7 +208,7 @@ npm start
 | Command | What it does |
 | --- | --- |
 | `npm start` | Builds and starts the app. Development builds never register a schedule. |
-| `npm test` | Runs the tests. |
+| `npm test` | Runs the tests. The manual checklist for real machines is in [docs/testing.md](docs/testing.md). |
 | `npm run typecheck` | Checks the TypeScript types. |
 | `npm run scan` | Prints containers and outdated packages in the terminal, read-only. |
 | `npm run dist:mac` | Creates the `.dmg` files in `release/`. |

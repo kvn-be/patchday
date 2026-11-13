@@ -176,7 +176,7 @@ Inside that folder:
 
 - `settings.json`: your settings.
 - `reports/`: one file per run.
-- `backups/`: stack files and database dumps. These may contain sensitive data, and old backups are not removed automatically.
+- `backups/`: stack files and database dumps, one folder per stack update. These may contain sensitive data. After each run, folders older than 30 days are removed, but the 10 newest always stay. Folders you add by hand are never touched.
 - `portainer.token`: your token, encrypted by the operating system.
 
 To find updates, Patchday sends image names to Docker Hub and other public registries, and asks GitHub for its own latest version.

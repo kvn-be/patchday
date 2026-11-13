@@ -6,6 +6,7 @@ import { exec } from '../engine/exec.ts';
 import { createTagLookup } from '../engine/registry.ts';
 import { run } from '../engine/run.ts';
 import { WORKER_FLAG } from '../core/elevation.ts';
+import { backupsToRemove } from '../core/retention.ts';
 import { DEFAULT_SETTINGS, type ProgressItem, type Report, type Settings } from '../engine/types.ts';
 import { runWorker, runWorkerSelfUpdate, setupWorker, workerReady, writeStatus } from './elevation.ts';
 import { syncSchedule } from './scheduler.ts';
@@ -69,7 +70,21 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
     mode,
   );
   await saveFile(data('reports', `${report.startedAt.replace(/[:.]/g, '-')}.json`), JSON.stringify(report, null, 2));
+  await pruneBackups(onLog);
   return report;
+}
+
+// Keeps the backup folder from growing forever. A failed cleanup never fails the run.
+async function pruneBackups(onLog: (message: string) => void): Promise<void> {
+  const names = await readdir(data('backups')).catch(() => []);
+  for (const name of backupsToRemove(names, new Date())) {
+    try {
+      await rm(data('backups', name), { recursive: true, force: true });
+      onLog(`removed old backup ${name}`);
+    } catch (error) {
+      onLog(`could not remove old backup ${name}: ${(error as Error).message}. Delete it by hand if you need the space.`);
+    }
+  }
 }
 
 function program(): string[] {

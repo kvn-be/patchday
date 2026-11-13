@@ -143,21 +143,19 @@ Image tags keep their scheme: `1.2.3-alpine` only moves to another `-alpine` tag
 
 ## Manage packages
 
-Four tabs sit next to the dial: **Updates**, **Packages**, **Find** and **History**.
+A sidebar leads to five places: **Overview**, **Updates**, **Packages**, **Schedule** and **History**. Every page has its title, one sentence on what it does, and its main action at the top right.
 
-| Tab | What you can do |
+| Page | What you can do |
 | --- | --- |
-| Packages | See every installed package with its version and a known update. Filter by name or package manager, or show only packages with updates. Select several to update or uninstall them together. |
-| Find | Search Homebrew, winget, Chocolatey and Scoop at once, then install one or several results. |
-| History | See the last 1000 installs, updates, removals and runs, with the tool's message for failures. |
+| Overview | See how many updates are ready, the next and the last run, and what waits for your decision. |
+| Updates | The latest check or run, grouped into what waits for you, problems, what installs by itself and what was applied. |
+| Packages | One search for both: installed packages first, packages you can add below. Update, skip a version or uninstall right in the row. |
+| Schedule | Pick the hour on the week dial, choose what happens then, and keep the **Never update** list. |
+| History | The last 1000 installs, updates, removals and runs, with the tool's message for failures. |
 
-In the **⋯** menu of a package:
-
-- **Skip 1.2.3** hides this one version. The next newer version shows up again.
-- **Ignore updates** adds the package to the **Never update** list. Scheduled runs leave it alone, too.
-- **Uninstall** removes the package after you confirm.
-
-**Export list** saves the selected packages, or all shown packages, as a JSON file. **Import list** reads such a file and shows the packages that are not installed yet, ready to install. Entries this system cannot install are left out and counted.
+- **Skip** hides one version of a package. The next newer version shows up again.
+- **Never update** on the **Schedule** page leaves a package or image alone, in the package list and in scheduled runs.
+- **Export list** saves your installed packages as a JSON file. **Import list** reads such a file and lists the packages that are not installed yet, ready to install. Entries this system cannot install are left out and counted.
 
 Installs and removals you start yourself run in your own user account, never through the admin task. On Windows, installers may ask for admin rights, and Chocolatey always does.
 
@@ -185,10 +183,12 @@ While Portainer is running and no token is saved, stacks that might belong to it
 | Install updates on schedule | Off | While off, scheduled runs only report. |
 | Install minor updates automatically | On | While off, minor updates of containers are suggestions. |
 | Update Patchday automatically | On | Checks once a day, downloads in the background and installs when you close Patchday. |
+
+The switches and the **Never update** list are on the **Schedule** page. **Settings** in the sidebar holds the Portainer connection and, on Windows, the admin access.
 | Never update | Empty | Names of images or packages to leave alone, separated by commas. |
 | Portainer address and token | Empty | Connects Portainer stacks. |
 
-Language and theme are in the header.
+Language is at the bottom of the sidebar.
 
 ## Your data
 

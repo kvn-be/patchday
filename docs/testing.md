@@ -79,25 +79,18 @@ Optional, Mac only: repeat with the stack deployed through Portainer instead of 
 - [ ] Automatic update: install the previous release, start it, and wait a minute. The note `Patchday <version> is downloaded` appears. Close Patchday: the next start shows the new version, and **History** lists `Patchday updated`.
 - [ ] Turn off **Update Patchday automatically** in **Settings**, set `lastSelfCheck` in `settings.json` to an old date, and restart. Nothing is downloaded.
 
-## 7. Packages, find and history
+## 7. Navigation, packages and history
 
 Use a small, harmless package for every step, for example `jq` with Homebrew, `jqlang.jq` with winget, `jq` with Chocolatey and `jq` with Scoop.
 
-- [ ] **Packages** lists every installed package of each package manager on the machine. The counts in the status line match `brew list`, `winget list`, `choco list` and `scoop list`.
-- [ ] Filter by name, by package manager and by **Only with updates**. Each filter narrows the list.
-- [ ] **Find**: search `jq`. Results come from every package manager on the machine. Installed packages show **Installed**.
-- [ ] Install `jq` from **Find** and confirm. Windows: Chocolatey shows an admin prompt. Cancel it once: the result says `the admin prompt was cancelled`.
-- [ ] The package now appears in **Packages**, and **History** has an entry with the right package manager.
-- [ ] Select two packages with updates and select **Update selected**. Both update one after the other.
-- [ ] Use **Skip <version>** on one package. It leaves **Only with updates** and is not planned by **Check now**.
-- [ ] Use **Ignore updates**, then **Allow updates**. The name appears in **Never update** in **Settings** and disappears again.
-- [ ] **Export list**, then uninstall `jq` and **Import list** with that file. `jq` shows as not installed and can be installed from there.
-- [ ] Uninstall `jq` with confirmation. It disappears from **Packages**, and **History** lists the removal.
-- [ ] A search with `-h` or `a$(x)` is refused with a message, and nothing runs.
-
-## Result
-
-| Machine | Version | Date | Passed | Notes |
-| --- | --- | --- | --- | --- |
-| Mac mini | | | | |
-| Windows PC | | | | |
+- [ ] The sidebar opens Overview, Updates, Packages, Schedule and History. The updates count next to **Updates** matches the Overview.
+- [ ] Move the pointer: the colored ground drifts slightly, the glass stays still. With **Reduce motion** turned on in the system, the ground does not move.
+- [ ] **Packages** lists every installed package of each package manager on the machine. The counts match `brew list`, `winget list`, `choco list` and `scoop list`.
+- [ ] Type `jq` in the search. Installed matches show first, packages you can add appear below after a moment.
+- [ ] Install `jq` from the search and confirm. Windows: Chocolatey shows an admin prompt. Cancel it once: the status says `the admin prompt was cancelled`.
+- [ ] The package now appears under **Installed**, and **History** has an entry with the right package manager.
+- [ ] **With updates** shows only packages with an update. **Update** installs one, **Skip** hides that version, and **Check now** does not plan it.
+- [ ] Add a package to **Never update** on the **Schedule** page. Its row shows `Updates ignored`. Remove it again.
+- [ ] **Export list**, then uninstall `jq` and **Import list** with that file. `jq` shows under **From your list** and can be installed from there.
+- [ ] Uninstall `jq` with confirmation. It disappears from **Installed**, and **History** lists the removal.
+- [ ] A search for `-h` or `a$(x)` is refused with a message, and nothing runs.

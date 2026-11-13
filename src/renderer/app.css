@@ -53,3 +53,33 @@ dialog { width: 560px; max-width: 560px; max-height: 660px; overflow-y: auto; pa
 dialog > * + * { margin-top: var(--space-2); }
 dialog::backdrop { background: rgba(4, 5, 20, .6); }
 
+
+/* Tabs and package views */
+.tabs { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--control-line); border-radius: var(--radius-full); align-self: start; }
+.tabs button { min-height: 36px; padding: 0 16px; border: 0; border-radius: var(--radius-full); background: none; color: var(--haze); font: 600 14px/1 var(--font-text); cursor: pointer; }
+.tabs button:hover { color: var(--moon); }
+.tabs button[aria-selected="true"] { background: var(--night-raised); color: var(--moon); }
+.view { display: flex; flex-direction: column; gap: var(--space-2); flex: 1 1 auto; min-height: 0; }
+.view[hidden] { display: none; }
+.view .pd-window { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.pd-btn-small { min-height: 34px; padding: 0 14px; font-size: 14px; }
+.pkg-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.pkg-filter, .pkg-select { min-height: 38px; padding: 0 12px; border: 1px solid var(--control-line); border-radius: var(--radius-field); background: var(--night-sunk); color: var(--moon); font: 15px var(--font-text); }
+.pkg-filter { flex: 1 1 240px; min-width: 0; }
+.pkg-bulk { display: flex; align-items: center; gap: var(--space-1); margin-left: auto; }
+.pkg-status { min-height: 1.4em; }
+.pkg-row { display: grid; grid-template-columns: 22px minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 4px var(--space-2); align-items: center; padding: 9px var(--space-3); border-top: 1px solid var(--line); font-size: 15px; }
+.pkg-row:first-child { border-top: 0; }
+.pkg-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--brass); }
+.pkg-history { grid-template-columns: 120px minmax(0, 1fr) auto; }
+.pkg-name { display: grid; min-width: 0; }
+.pkg-name span, .pkg-name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pkg-name small { color: var(--haze); font-size: 13px; }
+.pkg-row .pd-ver { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pkg-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-1); }
+.pkg-more { position: relative; }
+.pkg-more summary { list-style: none; }
+.pkg-more summary::-webkit-details-marker { display: none; }
+.pkg-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 3; display: grid; gap: 6px; padding: var(--space-1); border: 1px solid var(--line); border-radius: var(--radius-field); background: var(--night-raised); box-shadow: var(--shadow-window); }
+.pkg-menu .pd-btn { justify-content: flex-start; white-space: nowrap; }
+.self-update [hidden] { display: none; }

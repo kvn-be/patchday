@@ -1,8 +1,10 @@
 import { nextRun } from '../core/schedule.ts';
 import type { ProgressItem, Report, ReportItem, Settings } from '../engine/types.ts';
 import { reason, STRINGS, type Language } from './i18n.ts';
+import { createViews, type PackageApi } from './views.ts';
 
-interface Api {
+interface Api extends PackageApi {
+  onSelfReady(listener: (version: string) => void): void;
   state(): Promise<{ settings: Settings; reports: Report[]; version: string; platform: string; hasToken: boolean; adminReady: boolean; packaged: boolean }>;
   saveSettings(patch: Partial<Settings>): Promise<Settings>;
   check(): Promise<Report>;
@@ -43,6 +45,9 @@ let adminReady = false;
 let adminMessage = '';
 let selfVersion: string | null = null;
 let selfMessage = '';
+let selfReady = false;
+type Tab = 'updates' | 'packages' | 'discover' | 'history';
+let tab: Tab = 'updates';
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 const t = () => STRINGS[settings.language as Language];
 
@@ -194,15 +199,60 @@ function renderText(): void {
   $('admin-state').textContent = adminMessage || (adminReady ? t().adminOn : t().adminOff);
   $('admin-setup').hidden = adminReady;
   $('self-update').hidden = !selfVersion && !selfMessage;
-  $('self-text').textContent = selfMessage || (t().selfAvailable as string).replace('{version}', selfVersion ?? '');
+  $('self-text').textContent = selfMessage || (t()[selfReady ? 'selfReady' : 'selfAvailable'] as string).replace('{version}', selfVersion ?? '');
+  $('self-restart').hidden = !selfReady || Boolean(selfMessage);
+  document.querySelectorAll<HTMLElement>('[data-tab]').forEach((node) => {
+    const active = node.dataset.tab === tab;
+    node.setAttribute('aria-selected', String(active));
+    node.tabIndex = active ? 0 : -1;
+  });
+  for (const name of ['updates', 'packages', 'discover', 'history'] as Tab[]) $(`view-${name}`).hidden = name !== tab;
   $('self-update-button').className = `pd-btn ${selfVersion ? 'pd-btn-main' : 'pd-btn-line'}`;
 }
+
+const ask = (title: string, text: string, yes: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    const dialog = $<HTMLDialogElement>('ask');
+    $('ask-title').textContent = title;
+    $('ask-text').textContent = text;
+    $('ask-yes').textContent = yes;
+    const finish = (answer: boolean) => {
+      $('ask-yes').onclick = null;
+      $('ask-no').onclick = null;
+      dialog.onclose = null;
+      if (dialog.open) dialog.close();
+      resolve(answer);
+    };
+    $('ask-yes').onclick = () => finish(true);
+    $('ask-no').onclick = () => finish(false);
+    dialog.onclose = () => finish(false);
+    dialog.showModal();
+  });
+
+function showTab(next: Tab): void {
+  tab = next;
+  renderText();
+  views.open(next);
+}
+
+const views = createViews({
+  api,
+  t,
+  settings: () => settings,
+  patch: (values) => patch(values),
+  setSettings: (next) => { settings = next; },
+  busy: () => busy,
+  setBusy: (label) => setBusy(label),
+  ask,
+  showTab,
+});
 
 function renderAll(): void {
   renderText();
   mountDial();
   renderHint();
   renderReport();
+  views.render();
 }
 
 function setBusy(label: string): void {
@@ -242,6 +292,7 @@ async function start(): Promise<void> {
   $<HTMLInputElement>('enabled').checked = settings.scheduleEnabled;
   $<HTMLInputElement>('apply').checked = settings.applyUpdates;
   $<HTMLInputElement>('minor').checked = settings.autoMinor;
+  $<HTMLInputElement>('auto-self').checked = settings.autoSelfUpdate;
   $<HTMLInputElement>('holds').value = settings.holds.join(', ');
   $<HTMLInputElement>('portainer-url').value = settings.portainerUrl;
   renderAll();
@@ -257,6 +308,18 @@ async function start(): Promise<void> {
   });
   $('apply').addEventListener('change', (event) => void patch({ applyUpdates: (event.target as HTMLInputElement).checked }));
   $('minor').addEventListener('change', (event) => void patch({ autoMinor: (event.target as HTMLInputElement).checked }));
+  $('auto-self').addEventListener('change', (event) => void patch({ autoSelfUpdate: (event.target as HTMLInputElement).checked }));
+  const tabs = [...document.querySelectorAll<HTMLElement>('[data-tab]')];
+  tabs.forEach((node, index) => {
+    node.addEventListener('click', () => showTab(node.dataset.tab as Tab));
+    node.addEventListener('keydown', (event) => {
+      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      const next = tabs[(index + step + tabs.length) % tabs.length];
+      showTab(next.dataset.tab as Tab);
+      next.focus();
+    });
+  });
   $('holds').addEventListener('change', (event) => {
     void patch({ holds: (event.target as HTMLInputElement).value.split(',').map((name) => name.trim()).filter(Boolean) });
   });
@@ -291,6 +354,21 @@ async function start(): Promise<void> {
     renderText();
   };
   api.onSelfAvailable(showSelf);
+  api.onSelfReady((version) => {
+    selfReady = true;
+    showSelf(version);
+  });
+  $('self-restart').addEventListener('click', async () => {
+    selfMessage = t().selfRunning;
+    renderText();
+    try {
+      await api.installSelf();
+    } catch (error) {
+      const text = (error as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      selfMessage = `${t().selfFailed} ${reason(settings.language as Language, text)}`;
+      renderText();
+    }
+  });
   api.onSelfProgress((percent) => {
     const track = $('self-bar');
     track.hidden = false;

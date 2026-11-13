@@ -10,11 +10,16 @@ All notable changes to Patchday are listed here. Versions follow [semantic versi
 - Checks for pull requests: tests and type checks run on every pull request and push to `main`.
 - `SECURITY.md` with the way to report a vulnerability.
 - `docs/testing.md` with a manual test checklist for real machines.
+- Tests for the schedule mapping from the dial to launchd and Task Scheduler, the Portainer client, and winget output in English and German.
 
 ### Changed
 
 - Release builds also check the TypeScript types.
 - The landing page links its downloads to the GitHub releases and states that there is no account.
+
+### Fixed
+
+- winget updates are found even when winget draws its progress spinner in front of the table.
 
 ### Removed
 

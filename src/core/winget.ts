@@ -7,7 +7,12 @@ export interface WingetPackage {
 
 // winget has no JSON output for upgrades, so columns are cut at the header's offsets.
 export function parseWingetUpgrade(output: string): WingetPackage[] {
-  const lines = output.replace(/\r/g, '').split('\n');
+  // In a pipe, winget still draws its progress spinner with carriage returns in front of the header.
+  // Like a terminal, only the text after the last carriage return of a line counts.
+  const lines = output.split('\n').map((line) => {
+    const text = line.replace(/\r$/, '');
+    return text.slice(text.lastIndexOf('\r') + 1);
+  });
   const rule = lines.findIndex((line) => /^-{10,}/.test(line.trim()));
   if (rule < 1) return [];
   const header = lines[rule - 1];

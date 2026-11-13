@@ -56,7 +56,7 @@ export function macChecksum(yml: string, fileName: string): string | null {
 }
 
 export const MAC_SWAP_SCRIPT = `#!/bin/bash
-# Arguments: running process id, installed app, new app.
+# Arguments: running process id, installed app, new app, and --no-open when Patchday was closed on purpose.
 while kill -0 "$1" 2>/dev/null; do sleep 0.2; done
 backup="$2.previous"
 rm -rf "$backup"
@@ -67,7 +67,7 @@ if mv "$2" "$backup"; then
     mv "$backup" "$2"
   fi
 fi
-open "$2"
+if [ "$4" != "--no-open" ]; then open "$2"; fi
 `;
 
 export const SELF_CHECK_HOURS = 24;

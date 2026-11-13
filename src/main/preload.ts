@@ -15,4 +15,13 @@ contextBridge.exposeInMainWorld('patchday', {
   setupAdmin: () => ipcRenderer.invoke('admin'),
   onProgress: (listener: (items: unknown[]) => void) => ipcRenderer.on('progress', (_event, items) => listener(items)),
   onLog: (listener: (message: string) => void) => ipcRenderer.on('log', (_event, message) => listener(message)),
+  packages: () => ipcRenderer.invoke('packages'),
+  search: (query: string, managers: string[]) => ipcRenderer.invoke('search', query, managers),
+  packageAction: (action: string, packages: unknown[]) => ipcRenderer.invoke('package-action', action, packages),
+  onPackageProgress: (listener: (result: unknown) => void) => ipcRenderer.on('package-progress', (_event, result) => listener(result)),
+  skip: (key: string, version: string) => ipcRenderer.invoke('skip', key, version),
+  history: () => ipcRenderer.invoke('history'),
+  exportPackages: (packages: unknown[]) => ipcRenderer.invoke('export', packages),
+  importPackages: () => ipcRenderer.invoke('import'),
+  onSelfReady: (listener: (version: string) => void) => ipcRenderer.on('self-ready', (_event, version) => listener(version)),
 });

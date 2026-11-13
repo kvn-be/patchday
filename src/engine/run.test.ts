@@ -236,6 +236,25 @@ test('the swap script keeps the old app when the new one cannot be moved', async
   await rm(folder, { recursive: true });
 });
 
+test('the swap script opens the app again only after a restart, not after closing', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'swap-'));
+  const script = join(folder, 'swap.sh');
+  await writeFile(script, MAC_SWAP_SCRIPT);
+  // A stand-in for macOS `open` that only leaves a mark.
+  await writeFile(join(folder, 'open'), `#!/bin/bash\ntouch "${folder}/opened"\n`, { mode: 0o755 });
+  const env = { ...process.env, PATH: `${folder}:${process.env.PATH}` };
+  const swap = async (name: string, ...extra: string[]) => {
+    await mkdir(join(folder, `${name}.app`));
+    await new Promise((done) => execFile('bash', [script, '999999', join(folder, 'Patchday.app'), join(folder, `${name}.app`), ...extra], { env }, done));
+  };
+  await mkdir(join(folder, 'Patchday.app'));
+  await swap('A', '--no-open');
+  assert.ok(!(await readdir(folder)).includes('opened'));
+  await swap('B');
+  assert.ok((await readdir(folder)).includes('opened'));
+  await rm(folder, { recursive: true });
+});
+
 test('winget: a path error is repaired with a forced install', async () => {
   let done = false;
   const { deps, commands } = packageHarness('win32', (command, args) => {

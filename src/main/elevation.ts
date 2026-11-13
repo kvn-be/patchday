@@ -75,3 +75,9 @@ export async function runWorkerSelfUpdate(exec: Exec, jobPath: string, statusPat
     return status.state === 'done';
   });
 }
+
+// Used when Patchday closes: the task installs the update in the background and nothing waits for it.
+export async function startWorkerSelfUpdate(exec: Exec, jobPath: string): Promise<boolean> {
+  await writeFile(jobPath, JSON.stringify({ action: 'self-update', reopen: false }));
+  return (await exec('schtasks', ['/Run', '/TN', WORKER_TASK])).code === 0;
+}

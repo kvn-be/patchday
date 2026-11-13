@@ -76,6 +76,24 @@ Optional, Mac only: repeat with the stack deployed through Portainer instead of 
 
 - [ ] After a run, backup folders older than 30 days are removed, the 10 newest stay, and folders you created by hand are untouched.
 - [ ] With an older version installed, **Update Patchday** appears and installs the latest release. The app restarts on the new version.
+- [ ] Automatic update: install the previous release, start it, and wait a minute. The note `Patchday <version> is downloaded` appears. Close Patchday: the next start shows the new version, and **History** lists `Patchday updated`.
+- [ ] Turn off **Update Patchday automatically** in **Settings**, set `lastSelfCheck` in `settings.json` to an old date, and restart. Nothing is downloaded.
+
+## 7. Packages, find and history
+
+Use a small, harmless package for every step, for example `jq` with Homebrew, `jqlang.jq` with winget, `jq` with Chocolatey and `jq` with Scoop.
+
+- [ ] **Packages** lists every installed package of each package manager on the machine. The counts in the status line match `brew list`, `winget list`, `choco list` and `scoop list`.
+- [ ] Filter by name, by package manager and by **Only with updates**. Each filter narrows the list.
+- [ ] **Find**: search `jq`. Results come from every package manager on the machine. Installed packages show **Installed**.
+- [ ] Install `jq` from **Find** and confirm. Windows: Chocolatey shows an admin prompt. Cancel it once: the result says `the admin prompt was cancelled`.
+- [ ] The package now appears in **Packages**, and **History** has an entry with the right package manager.
+- [ ] Select two packages with updates and select **Update selected**. Both update one after the other.
+- [ ] Use **Skip <version>** on one package. It leaves **Only with updates** and is not planned by **Check now**.
+- [ ] Use **Ignore updates**, then **Allow updates**. The name appears in **Never update** in **Settings** and disappears again.
+- [ ] **Export list**, then uninstall `jq` and **Import list** with that file. `jq` shows as not installed and can be installed from there.
+- [ ] Uninstall `jq` with confirmation. It disappears from **Packages**, and **History** lists the removal.
+- [ ] A search with `-h` or `a$(x)` is refused with a message, and nothing runs.
 
 ## Result
 

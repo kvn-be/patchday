@@ -244,6 +244,8 @@ scripts/      Build script
 
 Patchday is free. If it saves you work, you can [buy me a coffee](https://ko-fi.com/kvnbe).
 
+Changes per version are in the [changelog](CHANGELOG.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
 ## License
 
 [MIT](LICENSE)

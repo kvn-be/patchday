@@ -2,7 +2,7 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
-## 1.0.0 - Unreleased
+## 1.0.0 - 2026-11-13
 
 ### Added
 
@@ -21,6 +21,10 @@ All notable changes to Patchday are listed here. Versions follow [semantic versi
 - Installed packages and the search for new ones share one page and one search field.
 - The dark theme is gone.
 - Scheduled runs leave skipped versions alone.
+
+### Removed
+
+- The landing page draft in `design/landing.html`.
 
 ### Security
 

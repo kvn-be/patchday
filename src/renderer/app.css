@@ -145,7 +145,7 @@ button { font: inherit; color: inherit; }
 /* Lists: icon, name, source, version, status, actions. Same order everywhere. */
 .list-head { padding: 14px 24px 8px; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--ink-2); }
 .list-head + .item { border-top: 0; }
-.item { display: grid; grid-template-columns: 40px minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 10px 24px; border-top: 1px solid var(--hairline); transition: background-color .2s; }
+.item { display: grid; grid-template-columns: 40px minmax(0, 1.2fr) minmax(0, .9fr) minmax(0, 1.1fr); gap: 4px 16px; align-items: center; padding: 10px 24px; border-top: 1px solid var(--hairline); transition: background-color .2s; }
 .item:hover { background: rgba(255, 255, 255, .6); }
 .item .icon { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 255, 255, .85); border: 1px solid rgba(14, 19, 48, .1); font-weight: 700; font-size: 16px; }
 .item .icon.new { background: rgba(255, 255, 255, .5); border-style: dashed; border-color: rgba(14, 19, 48, .25); color: var(--ink-2); }

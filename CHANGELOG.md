@@ -2,7 +2,7 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
-## 0.2.3 - Unreleased
+## 0.2.3 - 2026-11-13
 
 ### Added
 

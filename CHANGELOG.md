@@ -2,6 +2,12 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## Unreleased
+
+### Fixed
+
+- An update's progress no longer starts over when the next package begins. Each bar keeps counting up from where it was, and the overall bar grows smoothly instead of jumping.
+
 ## 1.1.1 - 2026-11-14
 
 ### Changed

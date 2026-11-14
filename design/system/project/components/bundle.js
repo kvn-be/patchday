@@ -183,8 +183,14 @@
         part.dot.classList.toggle('fail', failing);
         if (part.bar) {
           var full = state === 'done' || i < current;
+          var active = !full && state === 'running' && i === current;
           part.bar.classList.toggle('full', full);
-          part.bar.classList.toggle('active', !full && state === 'running' && i === current);
+          part.bar.classList.toggle('active', active);
+          // A CSS animation starts over whenever the element is put back into the page, as a list
+          // does when it redraws. A negative delay resumes it at the time it has really been running.
+          if (active && part.since === undefined) part.since = Date.now();
+          if (!active) part.since = undefined;
+          part.bar.style.animationDelay = active ? -(Date.now() - part.since) + 'ms' : '';
         }
       });
     }

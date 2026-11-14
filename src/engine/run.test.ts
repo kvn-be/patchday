@@ -84,6 +84,30 @@ test('a major update only becomes a suggestion', async () => {
   assert.ok(!commands.some((command) => command.includes('compose')));
 });
 
+test('update now applies a waiting major update with backup and health test', async () => {
+  const { deps, files, current } = harness({ healthyAfterDeploy: true, tags: ['1.27.1', '2.0.0'] });
+  const preview = await run(deps, DEFAULT_SETTINGS, 'preview');
+  assert.equal(preview.items[0].key, 'nginx:2.0.0');
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply', ['nginx:2.0.0']);
+  assert.deepEqual([report.items[0].outcome, report.items[0].reason], ['applied', 'updated by you']);
+  assert.equal(current(), 'nginx:2.0.0');
+  assert.ok([...files.keys()].some((path) => path.startsWith('/backup/')));
+});
+
+test('update now rolls back an unhealthy container', async () => {
+  const { deps, current } = harness({ healthyAfterDeploy: false, tags: ['1.27.1', '2.0.0'] });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply', ['nginx:2.0.0']);
+  assert.equal(report.items[0].outcome, 'rolled-back');
+  assert.equal(current(), 'nginx:1.27.1');
+});
+
+test('update now leaves other containers alone', async () => {
+  const { deps, current } = harness({ healthyAfterDeploy: true });
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply', ['other:9.9.9']);
+  assert.equal(report.items[0].outcome, 'planned');
+  assert.equal(current(), 'nginx:1.27.1');
+});
+
 test('a stack that may belong to Portainer is never touched as Compose', async () => {
   const { deps, commands } = harness({ healthyAfterDeploy: true });
   const exec = deps.exec;

@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('patchday', {
   saveSettings: (patch: unknown) => ipcRenderer.invoke('settings', patch),
   check: () => ipcRenderer.invoke('check'),
   update: () => ipcRenderer.invoke('update'),
+  updateNow: (keys: string[]) => ipcRenderer.invoke('update-now', keys),
   saveToken: (token: string) => ipcRenderer.invoke('token', token),
   saveAdminPassword: (password: string) => ipcRenderer.invoke('admin-password', password),
   forgetAdminPassword: () => ipcRenderer.invoke('admin-password-forget'),

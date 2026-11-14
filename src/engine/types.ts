@@ -14,6 +14,8 @@ export interface ReportItem {
   id?: string;
   // Set on optional updates (minor, no security fix): the "repository:tag" to approve them with.
   optional?: string;
+  // Set on waiting containers Patchday can update when you say so ("Update now"): their "repository:tag".
+  key?: string;
 }
 
 export interface Report {

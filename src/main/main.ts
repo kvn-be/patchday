@@ -112,8 +112,8 @@ function appendLog(message: string): void {
   }).catch(() => {});
 }
 
-async function execute(mode: Report['mode'], onLog: (message: string) => void, onProgress: (items: ProgressItem[]) => void = () => {}): Promise<Report> {
-  appendLog(`${mode === 'apply' ? 'update run' : 'check'} started`);
+async function execute(mode: Report['mode'], onLog: (message: string) => void, onProgress: (items: ProgressItem[]) => void = () => {}, only?: string[]): Promise<Report> {
+  appendLog(`${only ? `update now (${only.join(', ')})` : mode === 'apply' ? 'update run' : 'check'} started`);
   const log = (message: string) => { appendLog(message); onLog(message); };
   const settings = await loadSettings();
   const token = await loadToken();
@@ -138,6 +138,7 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
     },
     settings,
     mode,
+    only,
   ).finally(() => sudo?.close());
   await saveFile(data('reports', `${report.startedAt.replace(/[:.]/g, '-')}.json`), JSON.stringify(report, null, 2));
   await writeRunLog(report).catch((error) => appendLog(`run log not written: ${(error as Error).message}`));
@@ -268,11 +269,13 @@ function createWindow(): BrowserWindow {
 let busy = false;
 
 function registerIpc(): void {
-  const guarded = async (mode: Report['mode'], sender: Electron.WebContents) => {
+  const guarded = async (mode: Report['mode'], sender: Electron.WebContents, only?: string[]) => {
     if (busy) throw new Error('A run is already in progress');
     busy = true;
     try {
       const onItems = (items: ProgressItem[]) => sender.send('progress', items);
+      // "Update now" touches containers only, which need no admin rights, so it runs here on every system.
+      if (only) return await execute(mode, (message) => sender.send('log', message), onItems, only);
       // Windows: real updates go through the task that already holds admin rights.
       if (mode === 'apply' && (await workerReady(exec))) return await retryUserScope(await runWorker(exec, data('progress.json'), onItems));
       return await execute(mode, (message) => sender.send('log', message), onItems);
@@ -306,6 +309,11 @@ function registerIpc(): void {
   });
   ipcMain.handle('check', (event) => guarded('preview', event.sender));
   ipcMain.handle('update', (event) => guarded('apply', event.sender));
+  ipcMain.handle('update-now', (event, keys: unknown) => {
+    const valid = Array.isArray(keys) && keys.length > 0 && keys.length <= 50 && keys.every((key) => typeof key === 'string' && /^[\w./:@-]{1,300}$/.test(key));
+    if (!valid) throw new Error('Nothing to update');
+    return guarded('apply', event.sender, keys as string[]);
+  });
   ipcMain.handle('token', async (_event, token: string) => {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('This system cannot store the token safely');
     await saveFile(data('portainer.token'), '');

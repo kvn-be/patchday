@@ -8,6 +8,7 @@ interface Api extends PackageApi {
   saveSettings(patch: Partial<Settings>): Promise<Settings>;
   check(): Promise<Report>;
   update(): Promise<Report>;
+  updateNow(keys: string[]): Promise<Report>;
   saveToken(token: string): Promise<void>;
   saveAdminPassword(password: string): Promise<boolean>;
   forgetAdminPassword(): Promise<void>;
@@ -194,6 +195,7 @@ function renderReport(): void {
       const approved = entry.optional ? settings.approved.includes(entry.optional) : false;
       const pill = entry.optional ? approveButton(entry.optional, approved) : element('span', `pd-pill pd-pill-${tone}`, t()[text] as string);
       const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, pill);
+      if (entry.outcome === 'waiting' && entry.key) row.querySelector('.acts')?.append(updateNowButton(entry));
       if (entry.reason) row.append(element('span', 'reason', approved ? t().optionalApproved : reason(language(), entry.reason)));
       if (entry.detail) {
         const more = element('details', 'pd-detail');
@@ -221,6 +223,20 @@ function approveButton(key: string, approved: boolean): HTMLButtonElement {
   return node;
 }
 
+// Updates one waiting container right away, with the usual backup, health test and rollback.
+function updateNowButton(entry: ReportItem): HTMLButtonElement {
+  const node = element('button', 'pd-btn pd-btn-main pd-btn-small', t().updateNow) as HTMLButtonElement;
+  node.type = 'button';
+  node.disabled = busy;
+  node.addEventListener('click', async () => {
+    const text = fill(t().updateNowText, { name: entry.name, from: entry.from, to: entry.to, reason: reason(language(), entry.reason) });
+    if (!(await ask(fill(t().updateNowTitle, { name: entry.name }), text, t().updateNow))) return;
+    showPage('updates');
+    await perform(() => api.updateNow([entry.key as string]), t().updating);
+  });
+  return node;
+}
+
 // ---------- Overview ----------
 
 function scheduleDay(hour: number): number {
@@ -235,7 +251,7 @@ function nextRunText(): string {
 
 function renderOverview(): void {
   const current = report();
-  const planned = current?.mode === 'preview' ? count(current.items, 'planned') : 0;
+  const planned = current ? count(current.items, 'planned') : 0;
   const waiting = current ? current.items.filter(needsYou).length : 0;
   const ready = planned + waiting;
   $('hero-when').textContent = current ? fill(t().checkedAt, { when: formatWhen(current.startedAt) }) : t().notChecked;

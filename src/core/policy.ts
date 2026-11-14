@@ -1,4 +1,4 @@
-import { classify, isPrerelease } from './version.ts';
+import { classify, isPrerelease, parseTag } from './version.ts';
 
 export type Action = 'auto' | 'propose' | 'skip';
 
@@ -31,6 +31,13 @@ const PROTECTED: Array<[RegExp, string]> = [
   [/immich/i, 'services that must be updated together'],
 ];
 
+// Databases, caches and DNS take bug-fix releases by themselves: same data format, and the stack
+// is backed up (with a pg_dumpall for PostgreSQL), health-checked and rolled back on failure.
+// Anything bigger changes data or behaviour and stays with the user.
+const BUGFIX_OK = new Set(['database', 'cache', 'network or DNS']);
+// Since version 10, PostgreSQL counts X.Y: X is the major version, Y a bug-fix release.
+const POSTGRES = /(^|\/)(postgres|postgis|timescaledb)(:|$|-)/i;
+
 const BREAKING = /\b(breaking change|breaking changes|breaking:|migration required|manual migration|action required)\b/i;
 
 export function hasBreakingHint(notes: string): boolean {
@@ -54,7 +61,15 @@ export function decide(candidate: UpdateCandidate, options: PolicyOptions = DEFA
   if (options.holds.some((hold) => image.includes(hold))) return { action: 'propose', reason: 'on hold list' };
 
   const category = protectedCategory(image);
-  if (category) return { action: 'propose', reason: `protected: ${category}` };
+  if (category) {
+    const fix = bump === 'patch' || (bump === 'minor' && POSTGRES.test(image) && (parseTag(currentTag)?.numbers.length ?? 0) === 2);
+    if (!BUGFIX_OK.has(category) || !fix) return { action: 'propose', reason: `protected: ${category}` };
+    if (isPrerelease(currentTag) || isPrerelease(candidateTag)) return { action: 'propose', reason: 'prerelease' };
+    if (!healthy) return { action: 'propose', reason: 'container is not healthy' };
+    if (!managed) return { action: 'propose', reason: 'not managed by Compose or Portainer' };
+    if (releaseNotes && hasBreakingHint(releaseNotes)) return { action: 'propose', reason: 'release notes mention breaking changes' };
+    return { action: 'auto', reason: `bug-fix update (${category})` };
+  }
   if (isPrerelease(currentTag) || isPrerelease(candidateTag)) return { action: 'propose', reason: 'prerelease' };
   if (bump === 'major') return { action: 'propose', reason: 'major update' };
   if (!healthy) return { action: 'propose', reason: 'container is not healthy' };

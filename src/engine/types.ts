@@ -12,6 +12,8 @@ export interface ReportItem {
   detail?: string;
   // The package manager's id, when it differs from the name (winget).
   id?: string;
+  // Set on optional updates (minor, no security fix): the "repository:tag" to approve them with.
+  optional?: string;
 }
 
 export interface Report {
@@ -43,7 +45,12 @@ export interface Settings {
   hourOfWeek: number;
   scheduleEnabled: boolean;
   applyUpdates: boolean;
+  // Minor container updates without a security fix install by themselves only while this is on.
   autoMinor: boolean;
+  // Optional updates the user chose to install, as "repository:tag".
+  approved: string[];
+  // 2: minor updates became optional; older settings files are moved over once.
+  policyVersion?: number;
   holds: string[];
   language: 'en' | 'de';
   // Kept for old settings files; the app reads appearance.
@@ -62,7 +69,9 @@ export const DEFAULT_SETTINGS: Settings = {
   hourOfWeek: 147,
   scheduleEnabled: false,
   applyUpdates: false,
-  autoMinor: true,
+  autoMinor: false,
+  approved: [],
+  policyVersion: 2,
   holds: [],
   language: 'en',
   theme: 'dark',
@@ -80,3 +89,10 @@ export interface ExecResult {
 }
 
 export type Exec = (command: string, args: string[], options?: { timeoutMs?: number; env?: Record<string, string> }) => Promise<ExecResult>;
+
+// Settings files from before policy version 2 saved "autoMinor: true" as the default.
+// Minor updates are optional now; security fixes still install by themselves.
+export function migrateSettings(settings: Settings): Settings {
+  if ((settings.policyVersion ?? 1) >= 2) return settings;
+  return { ...settings, autoMinor: false, approved: settings.approved ?? [], policyVersion: 2 };
+}

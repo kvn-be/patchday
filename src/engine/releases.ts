@@ -69,3 +69,43 @@ export function createReleaseNotesLookup(fetcher: FetchLike = fetch as unknown a
     return notesBetween(await response.json(), from, to);
   };
 }
+
+interface Advisory {
+  ghsa_id?: string;
+  cve_id?: string | null;
+  state?: string;
+  withdrawn_at?: string | null;
+  vulnerabilities?: Array<{ patched_versions?: string | null }> | null;
+}
+
+// Published advisories whose fix ships after the running version, up to and including the new one.
+export function advisoriesBetween(advisories: Advisory[], from: string, to: string): string[] {
+  const low = parseTag(from)?.numbers ?? versionOf(from);
+  const high = parseTag(to)?.numbers ?? versionOf(to);
+  if (!low || !high) return [];
+  const fixed = advisories.filter((advisory) => {
+    if ((advisory.state && advisory.state !== 'published') || advisory.withdrawn_at) return false;
+    const patched = (advisory.vulnerabilities ?? []).flatMap((entry) => (entry.patched_versions ?? '').split(','));
+    return patched.some((text) => {
+      const version = versionOf(text);
+      return version !== null && compare(version, low) > 0 && compare(version, high) <= 0;
+    });
+  });
+  return fixed.map((advisory) => advisory.cve_id || advisory.ghsa_id || 'advisory');
+}
+
+export type AdvisoryLookup = (repository: string, source: string | null, from: string, to: string) => Promise<string[]>;
+
+export function createAdvisoryLookup(fetcher: FetchLike = fetch as unknown as FetchLike): AdvisoryLookup {
+  return async (repository, source, from, to) => {
+    const repo = githubRepo(repository, source);
+    if (!repo) return [];
+    const response = await fetcher(`https://api.github.com/repos/${repo.owner}/${repo.repo}/security-advisories?state=published&per_page=100`, {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Patchday' },
+    });
+    // A repository without advisories, or with the feature off, answers 404.
+    if (response.status === 404) return [];
+    if (!response.ok) throw new Error(`GitHub answered ${response.status}`);
+    return advisoriesBetween(await response.json(), from, to);
+  };
+}

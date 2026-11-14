@@ -3,19 +3,20 @@ import { bumpImage } from '../core/compose.ts';
 import { parseInspect, type ContainerInfo } from '../core/docker.ts';
 import { parseChocoOutdated, type ChocoPackage } from '../core/choco.ts';
 import { diagnoseBrew, diagnoseChoco, diagnoseScoop, diagnoseWinget, type Diagnosis } from '../core/failures.ts';
-import { decide, type Decision } from '../core/policy.ts';
+import { decide, MINOR_WITHOUT_NOTES, OPTIONAL_MINOR, type Decision } from '../core/policy.ts';
 import { isPrerelease, latestTag } from '../core/version.ts';
 import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
 import { isSkipped, parseScoopStatus, repairPlan, scoopCommand, WINGET_FLAGS, wingetTarget, type Package } from '../core/packages.ts';
 import { installWithRepair as repairLadder, lastLines, runSequence } from './repair.ts';
 import type { PortainerClient, PortainerStack } from './portainer.ts';
-import type { ReleaseNotesLookup } from './releases.ts';
+import type { AdvisoryLookup, ReleaseNotesLookup } from './releases.ts';
 import type { Exec, ExecResult, ItemSource, Phase, ProgressItem, Report, ReportItem, Settings } from './types.ts';
 
 export interface Deps {
   exec: Exec;
   tags: (repository: string) => Promise<string[]>;
   releaseNotes?: ReleaseNotesLookup;
+  advisories?: AdvisoryLookup;
   // SUDO_ASKPASS and its token, when the user saved an admin password for unattended runs.
   sudoEnv?: Record<string, string>;
   portainer: PortainerClient | null;
@@ -39,7 +40,6 @@ interface ImagePlan {
   decision: Decision;
 }
 
-const MINOR_WITHOUT_NOTES = 'minor update without release notes';
 const HEALTH_LIMIT_MS = 5 * 60_000;
 const HEALTH_POLL_MS = 10_000;
 export const BREW_ENV = { HOMEBREW_NO_ENV_HINTS: '1', HOMEBREW_NO_AUTO_UPDATE: '1', NONINTERACTIVE: '1' };
@@ -114,23 +114,35 @@ async function planDocker(deps: Deps, settings: Settings, stacks: PortainerStack
     }
     const to = latestTag(tag, tags);
     if (!to) continue;
-    const candidate = {
+    let candidate: Parameters<typeof decide>[0] = {
       image: repository,
       currentTag: tag,
       candidateTag: to,
       healthy: group.every((container) => container.healthy),
       managed: first.manager === 'compose' || first.manager === 'portainer',
     };
-    const policy = { autoMinor: settings.autoMinor, holds: settings.holds };
+    const policy = { autoMinor: settings.autoMinor, holds: settings.holds, approved: settings.approved };
     let decision = decide(candidate, policy);
-    // A minor update only goes ahead on its own when its release notes are found and mention nothing breaking.
-    if (decision.reason === MINOR_WITHOUT_NOTES && deps.releaseNotes) {
+    // A minor update goes ahead on its own only as a security fix (release notes or GitHub advisories),
+    // or, with minor updates switched on, when its release notes are found and mention nothing breaking.
+    const minor = decision.reason === MINOR_WITHOUT_NOTES || decision.reason === OPTIONAL_MINOR;
+    if (minor && deps.releaseNotes) {
       try {
         const releaseNotes = await deps.releaseNotes(repository, first.source, tag, to);
-        if (releaseNotes) decision = decide({ ...candidate, releaseNotes }, policy);
+        if (releaseNotes) candidate = { ...candidate, releaseNotes };
       } catch (error) {
         notes.push(`${repository}: release notes: ${(error as Error).message}`);
       }
+      decision = decide(candidate, policy);
+    }
+    if (minor && decision.action === 'propose' && decision.reason !== 'release notes mention breaking changes' && deps.advisories) {
+      try {
+        const advisories = await deps.advisories(repository, first.source, tag, to);
+        if (advisories.length) candidate = { ...candidate, advisories };
+      } catch (error) {
+        notes.push(`${repository}: security advisories: ${(error as Error).message}`);
+      }
+      decision = decide(candidate, policy);
     }
     if (decision.action === 'auto' && first.manager === 'portainer') {
       const stack = stacks?.find((entry) => entry.name === first.stack);
@@ -495,7 +507,8 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
     const plans = await planDocker(deps, settings, stacks, notes);
     auto = plans.filter((plan) => plan.decision.action === 'auto');
     for (const plan of plans.filter((entry) => entry.decision.action !== 'auto')) {
-      items.push({ source: 'docker', name: plan.containers[0].name, from: plan.from, to: plan.to, outcome: 'waiting', reason: plan.decision.reason });
+      const optional = plan.decision.reason === OPTIONAL_MINOR ? { optional: `${plan.repository}:${plan.to}` } : {};
+      items.push({ source: 'docker', name: plan.containers[0].name, from: plan.from, to: plan.to, outcome: 'waiting', reason: plan.decision.reason, ...optional });
     }
   } catch (error) {
     notes.push(`Docker: ${(error as Error).message}`);

@@ -79,6 +79,8 @@ const PHASES = { backup: 'phaseBackup', update: 'phaseUpdate', test: 'phaseTest'
 
 const formatWhen = (iso: string) => new Date(iso).toLocaleString(t().locale, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
 const count = (items: ReportItem[], ...outcomes: ReportItem['outcome'][]) => items.filter((item) => outcomes.includes(item.outcome)).length;
+// Optional updates (minor, no security fix) wait quietly in their own section and do not ask for attention.
+const needsYou = (item: ReportItem) => item.outcome === 'waiting' && !item.optional;
 
 function bar(tone: 'ok' | 'fail' | 'active' | 'busy', percent: number | null, label: string): HTMLElement {
   const track = element('div', `pd-progress pd-progress-${tone}`);
@@ -176,19 +178,23 @@ function renderReport(): void {
   }
   // Applied updates need nothing more; they stay in the history and the run logs.
   if (current.items.every((entry) => entry.outcome === 'applied')) box.append(element('div', 'notes', t().upToDate));
-  const groups: [ReportItem['outcome'][], keyof typeof STRINGS.en][] = [
-    [['waiting'], 'groupWaiting'],
-    [['failed', 'rolled-back'], 'groupProblems'],
-    [['planned'], 'groupPlanned'],
+  const groups: [(entry: ReportItem) => boolean, keyof typeof STRINGS.en][] = [
+    [needsYou, 'groupWaiting'],
+    [(entry) => entry.outcome === 'failed' || entry.outcome === 'rolled-back', 'groupProblems'],
+    [(entry) => entry.outcome === 'planned', 'groupPlanned'],
+    [(entry) => entry.outcome === 'waiting' && Boolean(entry.optional), 'groupOptional'],
   ];
-  for (const [outcomes, label] of groups) {
-    const members = current.items.filter((entry) => outcomes.includes(entry.outcome));
+  for (const [belongs, label] of groups) {
+    const members = current.items.filter(belongs);
     if (members.length === 0) continue;
     box.append(element('div', 'pd-list-head', fill(t()[label] as string, { count: members.length })));
+    if (label === 'groupOptional') box.append(element('div', 'notes', t().optionalLead));
     for (const entry of members) {
       const [tone, text] = PILL[entry.outcome];
-      const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, element('span', `pd-pill pd-pill-${tone}`, t()[text] as string));
-      if (entry.reason) row.append(element('span', 'reason', reason(language(), entry.reason)));
+      const approved = entry.optional ? settings.approved.includes(entry.optional) : false;
+      const pill = entry.optional ? approveButton(entry.optional, approved) : element('span', `pd-pill pd-pill-${tone}`, t()[text] as string);
+      const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, pill);
+      if (entry.reason) row.append(element('span', 'reason', approved ? t().optionalApproved : reason(language(), entry.reason)));
       if (entry.detail) {
         const more = element('details', 'pd-detail');
         more.append(element('summary', '', t().details), element('pre', '', entry.detail));
@@ -198,6 +204,21 @@ function renderReport(): void {
     }
   }
   for (const note of current.notes) box.append(element('div', 'notes', note));
+}
+
+// An optional update installs at the next run once approved; approving again takes it back.
+function approveButton(key: string, approved: boolean): HTMLButtonElement {
+  const node = element('button', `pd-btn pd-btn-${approved ? 'main' : 'line'} pd-btn-small`, approved ? t().optionalUndo : t().optionalApprove) as HTMLButtonElement;
+  node.type = 'button';
+  node.setAttribute('aria-pressed', String(approved));
+  node.addEventListener('click', async () => {
+    const offered = new Set((report()?.items ?? []).map((entry) => entry.optional).filter(Boolean));
+    // Approvals for versions no longer offered are dropped on the way.
+    const kept = settings.approved.filter((entry) => entry !== key && offered.has(entry));
+    await patch({ approved: settings.approved.includes(key) ? kept : [...kept, key] });
+    renderReport();
+  });
+  return node;
 }
 
 // ---------- Overview ----------
@@ -215,7 +236,7 @@ function nextRunText(): string {
 function renderOverview(): void {
   const current = report();
   const planned = current?.mode === 'preview' ? count(current.items, 'planned') : 0;
-  const waiting = current ? count(current.items, 'waiting') : 0;
+  const waiting = current ? current.items.filter(needsYou).length : 0;
   const ready = planned + waiting;
   $('hero-when').textContent = current ? fill(t().checkedAt, { when: formatWhen(current.startedAt) }) : t().notChecked;
   const title = planned === 0 && waiting > 0 ? (waiting === 1 ? t().heroWaitOne : fill(t().heroWaiting, { count: waiting })) : ready === 1 ? t().heroOne : fill(t().heroCount, { count: ready });
@@ -242,7 +263,7 @@ function renderOverview(): void {
     pills.append(element('span', 'pd-pill pd-pill-ok', `${applied} ${t().applied}`));
     if (problems) pills.append(element('span', 'pd-pill pd-pill-back', problems === 1 ? t().problemOne : fill(t().problemMany, { count: problems })));
   }
-  const first = current?.items.find((entry) => entry.outcome === 'waiting');
+  const first = current?.items.find(needsYou);
   $('card-wait').textContent = first ? first.name : t().waitNone;
   $('card-wait-text').textContent = first
     ? [`${first.from} → ${first.to}: ${reason(language(), first.reason)}.`, waiting === 2 ? t().waitMoreOne : waiting > 2 ? fill(t().waitMore, { count: waiting - 1 }) : ''].filter(Boolean).join(' ')

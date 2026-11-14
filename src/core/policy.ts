@@ -9,11 +9,15 @@ export interface UpdateCandidate {
   healthy: boolean;
   managed: boolean;
   releaseNotes?: string;
+  // Security advisories (GHSA or CVE ids) the new version fixes.
+  advisories?: string[];
 }
 
 export interface PolicyOptions {
   autoMinor: boolean;
   holds: string[];
+  // Optional updates the user chose to install anyway, as "repository:tag".
+  approved?: string[];
 }
 
 export interface Decision {
@@ -21,7 +25,11 @@ export interface Decision {
   reason: string;
 }
 
-export const DEFAULT_POLICY: PolicyOptions = { autoMinor: true, holds: [] };
+export const DEFAULT_POLICY: PolicyOptions = { autoMinor: false, holds: [] };
+
+// Reasons the engine and the app look for: a minor update that is neither a security fix nor approved.
+export const OPTIONAL_MINOR = 'optional minor update';
+export const MINOR_WITHOUT_NOTES = 'minor update without release notes';
 
 const PROTECTED: Array<[RegExp, string]> = [
   [/(^|\/)(postgres|postgis|mysql|mariadb|mongo|mongodb|timescaledb|influxdb|couchdb)(:|$|-)/i, 'database'],
@@ -42,6 +50,17 @@ const BREAKING = /\b(breaking change|breaking changes|breaking:|migration requir
 
 export function hasBreakingHint(notes: string): boolean {
   return BREAKING.test(notes);
+}
+
+// A release that says it fixes a vulnerability: a CVE or GHSA id, or plain words like "security fix".
+const SECURITY = /\b(CVE-\d{4}-\d{4,}|GHSA(-[23456789cfghjmpqrvwx]{4}){3}|security (fix|fixes|update|patch|release|issue|vulnerabilit(y|ies))|vulnerabilit(y|ies) (fix|fixed|patched))\b/i;
+
+export function hasSecurityHint(notes: string): boolean {
+  return SECURITY.test(notes);
+}
+
+export function isSecurityFix(candidate: Pick<UpdateCandidate, 'releaseNotes' | 'advisories'>): boolean {
+  return (candidate.advisories?.length ?? 0) > 0 || (candidate.releaseNotes ? hasSecurityHint(candidate.releaseNotes) : false);
 }
 
 export function protectedCategory(image: string): string | null {
@@ -76,9 +95,12 @@ export function decide(candidate: UpdateCandidate, options: PolicyOptions = DEFA
   if (!managed) return { action: 'propose', reason: 'not managed by Compose or Portainer' };
   if (releaseNotes && hasBreakingHint(releaseNotes)) return { action: 'propose', reason: 'release notes mention breaking changes' };
 
-  if (bump === 'minor') {
-    if (!options.autoMinor) return { action: 'propose', reason: 'minor updates need approval' };
-    if (!releaseNotes) return { action: 'propose', reason: 'minor update without release notes' };
-  }
-  return { action: 'auto', reason: `${bump} update` };
+  // Patch releases carry security and bug fixes and go ahead by themselves.
+  if (bump === 'patch') return { action: 'auto', reason: 'patch update' };
+  // Minor releases: security fixes go ahead by themselves, everything else is optional.
+  if (isSecurityFix(candidate)) return { action: 'auto', reason: 'security update' };
+  if (options.approved?.includes(`${image}:${candidateTag}`)) return { action: 'auto', reason: 'approved by you' };
+  if (!options.autoMinor) return { action: 'propose', reason: OPTIONAL_MINOR };
+  if (!releaseNotes) return { action: 'propose', reason: MINOR_WITHOUT_NOTES };
+  return { action: 'auto', reason: 'minor update' };
 }

@@ -2,6 +2,13 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## 1.4.0 - 2026-11-14
+
+### Added
+
+- **Update now** next to every waiting or optional container update on **Updates**: Patchday installs that one update right away instead of you doing it in Portainer, after asking once with the reason it waited. The stack and its databases are backed up first, and the container is rolled back if it is not healthy within 5 minutes. Services that must be updated together, like Immich, go as one. Other updates and packages are left for the next run.
+- Updates Patchday cannot install itself (Portainer not connected, stack deployed from Git, Compose file not found, no image for this machine, container not run by Compose or Portainer) show no button.
+
 ## 1.3.0 - 2026-11-14
 
 ### Changed

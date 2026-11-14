@@ -3,7 +3,7 @@ import { bumpImage } from '../core/compose.ts';
 import { parseInspect, type ContainerInfo } from '../core/docker.ts';
 import { parseChocoOutdated, type ChocoPackage } from '../core/choco.ts';
 import { diagnoseBrew, diagnoseChoco, diagnoseScoop, diagnoseWinget, type Diagnosis } from '../core/failures.ts';
-import { decide, MINOR_WITHOUT_NOTES, OPTIONAL_MINOR, type Decision } from '../core/policy.ts';
+import { decide, MINOR_WITHOUT_NOTES, OPTIONAL_MINOR, protectedCategory, type Decision } from '../core/policy.ts';
 import { isPrerelease, latestTag } from '../core/version.ts';
 import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
 import { isSkipped, parseScoopStatus, repairPlan, scoopCommand, WINGET_FLAGS, wingetTarget, type Package } from '../core/packages.ts';
@@ -39,6 +39,15 @@ interface ImagePlan {
   to: string;
   decision: Decision;
 }
+
+// Reasons the user can overrule with "Update now". The others mean Patchday cannot do the update itself.
+const CANNOT_OVERRULE = new Set(['tag schemes differ', 'not managed by Compose or Portainer', 'already up to date']);
+const TOGETHER = 'services that must be updated together';
+export const BY_YOU = 'updated by you';
+// Waiting reasons "Update now" cannot fix: Patchday has no way to deploy these.
+const FIXED_BLOCKERS = ['Portainer is not connected', 'stack is deployed from Git', 'Compose file not found', 'no confirmed '];
+
+export const planKey = (repository: string, tag: string) => `${repository}:${tag}`;
 
 const HEALTH_LIMIT_MS = 5 * 60_000;
 const HEALTH_POLL_MS = 10_000;
@@ -92,7 +101,7 @@ async function supportsArch(deps: Deps, image: string): Promise<boolean> {
   return manifest.manifests.some((entry: { platform?: { architecture?: string } }) => entry.platform?.architecture === wanted);
 }
 
-async function planDocker(deps: Deps, settings: Settings, stacks: PortainerStack[] | null, notes: string[]): Promise<ImagePlan[]> {
+async function planDocker(deps: Deps, settings: Settings, stacks: PortainerStack[] | null, notes: string[], only: Set<string> | null = null): Promise<ImagePlan[]> {
   const containers = await inspectAll(deps, stacks?.map((stack) => stack.name));
   const groups = new Map<string, ContainerInfo[]>();
   for (const container of containers) {
@@ -144,20 +153,36 @@ async function planDocker(deps: Deps, settings: Settings, stacks: PortainerStack
       }
       decision = decide(candidate, policy);
     }
-    if (decision.action === 'auto' && first.manager === 'portainer') {
-      const stack = stacks?.find((entry) => entry.name === first.stack);
-      if (!stack) decision = { action: 'propose', reason: 'Portainer is not connected' };
-      else if (stack.gitManaged) decision = { action: 'propose', reason: 'stack is deployed from Git' };
-    }
-    if (decision.action === 'auto' && first.manager === 'compose' && group.some((container) => !container.composeFile)) {
-      decision = { action: 'propose', reason: 'Compose file not found' };
-    }
-    if (decision.action === 'auto' && !(await supportsArch(deps, `${repository}:${to}`))) {
-      decision = { action: 'propose', reason: `no confirmed ${deps.arch} image` };
+    // "Update now": the user overrules the waiting reason; backup, health test and rollback still apply.
+    if (only?.has(planKey(repository, to)) && decision.action === 'propose' && !CANNOT_OVERRULE.has(decision.reason)) {
+      decision = { action: 'auto', reason: BY_YOU };
     }
     plans.push({ containers: group, stack: first.stack, repository, from: tag, to, decision });
   }
+  // Services that must be updated together (Immich) go as one: choosing one takes the others of its stack along.
+  for (const chosen of plans.filter((plan) => plan.decision.reason === BY_YOU && protectedCategory(plan.repository) === TOGETHER)) {
+    for (const plan of plans) {
+      if (plan.stack === chosen.stack && plan.decision.action === 'propose' && protectedCategory(plan.repository) === TOGETHER) plan.decision = { action: 'auto', reason: BY_YOU };
+    }
+  }
+  for (const plan of plans) plan.decision = await canDeploy(deps, plan, stacks, plan.decision);
   return plans;
+}
+
+// Whether Patchday can deploy the update itself: a reachable Portainer stack or a Compose file, and an image for this machine.
+async function canDeploy(deps: Deps, plan: ImagePlan, stacks: PortainerStack[] | null, decision: Decision): Promise<Decision> {
+  if (decision.action !== 'auto') return decision;
+  const first = plan.containers[0];
+  if (first.manager === 'portainer') {
+    const stack = stacks?.find((entry) => entry.name === first.stack);
+    if (!stack) return { action: 'propose', reason: 'Portainer is not connected' };
+    if (stack.gitManaged) return { action: 'propose', reason: 'stack is deployed from Git' };
+  }
+  if (first.manager === 'compose' && plan.containers.some((container) => !container.composeFile)) {
+    return { action: 'propose', reason: 'Compose file not found' };
+  }
+  if (!(await supportsArch(deps, `${plan.repository}:${plan.to}`))) return { action: 'propose', reason: `no confirmed ${deps.arch} image` };
+  return decision;
 }
 
 function stamp(date: Date): string {
@@ -486,8 +511,38 @@ function summarize(items: ReportItem[]): Report['status'] {
   return items.some((item) => item.outcome === 'waiting') ? 'warning' : 'ok';
 }
 
-export async function run(deps: Deps, settings: Settings, mode: Report['mode']): Promise<Report> {
+async function applyChosen(deps: Deps, tracker: Tracker, auto: ImagePlan[], stacks: PortainerStack[] | null, notes: string[]): Promise<ReportItem[]> {
+  const items: ReportItem[] = [];
+  tracker.plan(auto.map((plan) => ({ source: 'docker' as const, name: plan.containers[0].name, from: plan.from, to: plan.to })));
+  try {
+    const everything = await inspectAll(deps, stacks?.map((stack) => stack.name));
+    const byStack = new Map<string, ImagePlan[]>();
+    for (const plan of auto) byStack.set(plan.stack as string, [...(byStack.get(plan.stack as string) ?? []), plan]);
+    for (const group of byStack.values()) items.push(...(await applyStack(deps, tracker, group, everything, stacks)));
+  } catch (error) {
+    notes.push(`Docker: ${(error as Error).message}`);
+  }
+  return items;
+}
+
+function packagePreview(
+  brew: { open: OutdatedPackage[] } | null,
+  choco: { open: ChocoPackage[] } | null,
+  winget: WingetPackage[],
+  scoopApps: { open: { id: string; installed: string; available: string }[] } | null,
+): ReportItem[] {
+  return [
+    ...(brew?.open ?? []).map((entry) => packageItem('brew', entry.name, entry.installed, entry.available, 'planned', 'Homebrew update')),
+    ...(choco?.open ?? []).map((entry) => packageItem('choco', entry.name, entry.installed, entry.available, 'planned', 'Chocolatey update')),
+    ...winget.map((entry) => packageItem('winget', entry.name, entry.installed, entry.available, 'planned', 'winget update', undefined, entry.id)),
+    ...(scoopApps?.open ?? []).map((entry) => packageItem('scoop', entry.id, entry.installed, entry.available, 'planned', 'Scoop update')),
+  ];
+}
+
+// only: "repository:tag" of the containers to update right now ("Update now"); packages are then left alone.
+export async function run(deps: Deps, settings: Settings, mode: Report['mode'], only?: string[]): Promise<Report> {
   const startedAt = deps.now().toISOString();
+  const selected = mode === 'apply' && only?.length ? new Set(only) : null;
   const notes: string[] = [];
   const items: ReportItem[] = [];
   const apply = mode === 'apply';
@@ -504,11 +559,18 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
 
   let auto: ImagePlan[] = [];
   try {
-    const plans = await planDocker(deps, settings, stacks, notes);
-    auto = plans.filter((plan) => plan.decision.action === 'auto');
+    const plans = await planDocker(deps, settings, stacks, notes, selected);
+    const chosen = (plan: ImagePlan) => plan.decision.action === 'auto' && (!selected || plan.decision.reason === BY_YOU || selected.has(planKey(plan.repository, plan.to)));
+    auto = plans.filter(chosen);
+    // "Update now" runs only the chosen containers; the other automatic ones stay planned for the next run.
+    for (const plan of plans.filter((entry) => entry.decision.action === 'auto' && !chosen(entry))) {
+      items.push({ source: 'docker', name: plan.containers[0].name, from: plan.from, to: plan.to, outcome: 'planned', reason: plan.decision.reason });
+    }
     for (const plan of plans.filter((entry) => entry.decision.action !== 'auto')) {
-      const optional = plan.decision.reason === OPTIONAL_MINOR ? { optional: `${plan.repository}:${plan.to}` } : {};
-      items.push({ source: 'docker', name: plan.containers[0].name, from: plan.from, to: plan.to, outcome: 'waiting', reason: plan.decision.reason, ...optional });
+      const key = planKey(plan.repository, plan.to);
+      const optional = plan.decision.reason === OPTIONAL_MINOR ? { optional: key } : {};
+      const updatable = CANNOT_OVERRULE.has(plan.decision.reason) || FIXED_BLOCKERS.some((blocker) => plan.decision.reason.startsWith(blocker)) ? {} : { key };
+      items.push({ source: 'docker', name: plan.containers[0].name, from: plan.from, to: plan.to, outcome: 'waiting', reason: plan.decision.reason, ...optional, ...updatable });
     }
   } catch (error) {
     notes.push(`Docker: ${(error as Error).message}`);
@@ -519,7 +581,7 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
   let choco: Awaited<ReturnType<typeof listChoco>> = null;
   let scoopApps: Awaited<ReturnType<typeof listScoop>> = null;
   try {
-    if (deps.platform === 'darwin' || deps.platform === 'linux') brew = await listBrew(deps, settings, apply);
+    if (deps.platform === 'darwin' || deps.platform === 'linux') brew = await listBrew(deps, settings, apply && !selected);
     if (deps.platform === 'win32') {
       choco = await listChoco(deps, settings);
       winget = await listWinget(deps, settings);
@@ -528,7 +590,7 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
       for (const entry of winget.filter((item) => betaFor(item.installed, item.available))) items.push(packageItem('winget', entry.name, entry.installed, entry.available, 'waiting', 'prerelease', undefined, entry.id));
       if (choco) choco = { ...choco, open: choco.open.filter((item) => !betaFor(item.installed, item.available)) };
       winget = winget.filter((item) => !betaFor(item.installed, item.available));
-      scoopApps = await listScoop(deps, settings, apply);
+      scoopApps = await listScoop(deps, settings, apply && !selected);
     }
   } catch (error) {
     notes.push(`Packages: ${(error as Error).message}`);
@@ -537,7 +599,12 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
   for (const entry of choco?.held ?? []) items.push(packageItem('choco', entry.name, entry.installed, entry.available, 'waiting', entry.pinned ? 'pinned in Chocolatey' : 'on hold list'));
   for (const entry of scoopApps?.held ?? []) items.push(packageItem('scoop', entry.id, entry.installed, entry.available, 'waiting', 'on hold list'));
 
-  if (!apply) {
+  if (!apply || selected) {
+    if (selected) {
+      // Packages are not touched by "Update now"; they stay planned for the next run.
+      items.push(...(await applyChosen(deps, tracker, auto, stacks, notes)));
+      return { startedAt, finishedAt: deps.now().toISOString(), mode, status: summarize(items), items: [...items, ...packagePreview(brew, choco, winget, scoopApps)], notes };
+    }
     for (const plan of auto) items.push({ source: 'docker', name: plan.containers[0].name, from: plan.from, to: plan.to, outcome: 'planned', reason: plan.decision.reason });
     for (const entry of brew?.open ?? []) items.push(packageItem('brew', entry.name, entry.installed, entry.available, 'planned', 'Homebrew update'));
     for (const entry of choco?.open ?? []) items.push(packageItem('choco', entry.name, entry.installed, entry.available, 'planned', 'Chocolatey update'));

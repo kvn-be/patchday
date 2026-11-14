@@ -26,12 +26,14 @@ declare global {
     Patchday: {
       mountWeekDial(svg: SVGSVGElement, input: HTMLInputElement, options: { hour: number; days: readonly string[]; short: readonly string[]; onChange(hour: number): void }): unknown;
       startParallax(root?: HTMLElement): () => void;
+      mountSteps(root: HTMLElement, options: { steps: number; current?: number; state?: string; label?: string; scale?: number }): { element: SVGSVGElement; set(current: number, state: 'running' | 'done' | 'failed', label?: string): void };
+      mountWheel(root: HTMLElement, options: { items: { value: number; label: string }[]; value: number; label?: string; rowHeight?: number; onChange(value: number): void }): { set(value: number, animate?: boolean): void; get(): number };
     };
   }
 }
 
-type Page = 'overview' | 'updates' | 'packages' | 'schedule' | 'history';
-const PAGES: Page[] = ['overview', 'updates', 'packages', 'schedule', 'history'];
+type Page = 'overview' | 'updates' | 'packages' | 'history' | 'settings';
+const PAGES: Page[] = ['overview', 'updates', 'packages', 'history', 'settings'];
 
 const api = window.patchday;
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -69,7 +71,7 @@ const PILL: Record<ReportItem['outcome'], [string, keyof typeof STRINGS.en]> = {
   'rolled-back': ['back', 'bBack'],
   failed: ['back', 'bFailed'],
 };
-const PHASES = { backup: 'phaseBackup', update: 'phaseUpdate', test: 'phaseTest', rollback: 'phaseRollback', retry: 'phaseRetry' } as const;
+const PHASES = { backup: 'phaseBackup', update: 'phaseUpdate', test: 'phaseTest', rollback: 'phaseRollback', retry: 'phaseRetry', reinstall: 'phaseReinstall' } as const;
 
 const formatWhen = (iso: string) => new Date(iso).toLocaleString(t().locale, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
 const count = (items: ReportItem[], ...outcomes: ReportItem['outcome'][]) => items.filter((item) => outcomes.includes(item.outcome)).length;
@@ -109,14 +111,39 @@ function renderLive(box: HTMLElement, items: ProgressItem[]): void {
   total.append(element('span', 'muted', `${t().updating} ${finished} / ${items.length} ${t().overall}`), bar('active', share, t().overall));
   box.append(total);
   for (const entry of items) {
-    const tone = entry.state === 'failed' ? 'fail' : entry.state === 'done' ? 'ok' : entry.percent === null ? 'busy' : 'active';
     const label = entry.state === 'done' ? t().bApplied : entry.state === 'failed' ? t().bFailed : entry.phase ? t()[PHASES[entry.phase]] : t().queued;
     const pill = element('span', `pd-pill pd-pill-${entry.state === 'done' ? 'ok' : entry.state === 'failed' ? 'back' : 'plain'}`, label);
     const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, pill);
-    row.append(bar(tone, entry.percent, entry.name));
+    const holder = element('div', 'steps');
+    holder.append(stepsFor(entry, label).element);
+    row.append(holder);
     if (entry.reason) row.append(element('span', 'reason', reason(language(), entry.reason)));
     box.append(row);
   }
+}
+
+// Containers: back up, update, test, done. Packages: install, repair, done.
+const CONTAINER_STEPS: Partial<Record<ProgressItem['phase'] & string, number>> = { backup: 0, update: 1, test: 2, rollback: 2 };
+const PACKAGE_STEPS: Partial<Record<ProgressItem['phase'] & string, number>> = { update: 0, retry: 1, reinstall: 1 };
+const stepViews = new Map<string, ReturnType<Window['Patchday']['mountSteps']>>();
+// The last phase each item reached, so a failure is marked where it happened.
+const reached = new Map<string, number>();
+
+function stepsFor(entry: ProgressItem, label: string): ReturnType<Window['Patchday']['mountSteps']> {
+  const container = entry.source === 'docker';
+  const count = container ? 4 : 3;
+  let view = stepViews.get(entry.id);
+  if (!view) {
+    view = window.Patchday.mountSteps(document.createElement('div'), { steps: count });
+    stepViews.set(entry.id, view);
+  }
+  const map = container ? CONTAINER_STEPS : PACKAGE_STEPS;
+  const known = entry.phase ? map[entry.phase] : undefined;
+  const current = entry.state === 'done' ? count - 1 : entry.state === 'queued' ? -1 : known ?? reached.get(entry.id) ?? 0;
+  if (current >= 0) reached.set(entry.id, current);
+  const state = entry.state === 'done' ? 'done' : entry.state === 'failed' ? 'failed' : 'running';
+  view.set(current, state, fill(t().stepsLabel, { name: entry.name, phase: label }));
+  return view;
 }
 
 function renderReport(): void {
@@ -191,10 +218,8 @@ function renderOverview(): void {
   nav.hidden = ready === 0;
   nav.textContent = String(ready);
 
-  const hour = settings.hourOfWeek;
-  $('mini-hand').style.transform = `rotate(${(hour / 168) * 360}deg)`;
-  $('mini-day').textContent = t().days[Math.floor(hour / 24)];
-  $('mini-time').textContent = `${String(hour % 24).padStart(2, '0')}:00`;
+  wheels?.day.set(Math.floor(settings.hourOfWeek / 24), true);
+  wheels?.hour.set(settings.hourOfWeek % 24, true);
 
   $('card-next').textContent = nextRunText();
   const lastRun = reports.find((entry) => entry.mode === 'apply');
@@ -214,19 +239,18 @@ function renderOverview(): void {
     : t().waitNoneText;
 }
 
-// ---------- Schedule ----------
+// ---------- Settings ----------
 
 function setSwitch(id: string, on: boolean): void {
   $(id).setAttribute('aria-checked', String(on));
 }
 
-function renderSchedule(): void {
-  const hour = settings.hourOfWeek;
-  const night = hour % 24 < 6;
-  const hint = $('hint');
-  hint.textContent = night ? t().noteNight : t().noteDay;
-  hint.className = `note ${night ? 'night' : 'day'}`;
-  $('next').textContent = settings.scheduleEnabled ? `${t().next} ${nextRunText()}` : t().off;
+function renderSettings(): void {
+  const night = settings.hourOfWeek % 24 < 6;
+  const note = $('when-note');
+  note.textContent = night ? t().noteNight : t().noteDay;
+  note.className = `when-note ${night ? 'night' : 'day'}`;
+  all('[data-appearance]').forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.appearance === settings.appearance)));
   setSwitch('enabled', settings.scheduleEnabled);
   setSwitch('enabled-quick', settings.scheduleEnabled);
   setSwitch('apply', settings.applyUpdates);
@@ -245,40 +269,51 @@ function renderSchedule(): void {
   }
 }
 
-function mountDial(): void {
-  const slot = $('dial-slot');
-  slot.replaceChildren();
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'pd-dial');
-  svg.setAttribute('viewBox', '0 0 600 600');
-  svg.setAttribute('aria-hidden', 'true');
-  const label = element('label', 'dial-label', t().pick);
-  const input = document.createElement('input');
-  input.type = 'range';
-  input.min = '0';
-  input.max = '167';
-  input.value = String(settings.hourOfWeek);
-  label.append(input);
-  slot.append(svg, label);
-  window.Patchday.mountWeekDial(svg, input, {
-    hour: settings.hourOfWeek,
-    days: t().days,
-    short: t().short,
-    onChange(hour) {
-      settings.hourOfWeek = hour;
-      renderSchedule();
+// Day and time on Overview, saved once the wheel rests.
+let wheels: { day: ReturnType<Window['Patchday']['mountWheel']>; hour: ReturnType<Window['Patchday']['mountWheel']> } | null = null;
+
+function setHour(hour: number): void {
+  if (hour === settings.hourOfWeek) return;
+  settings.hourOfWeek = hour;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => void api.saveSettings({ hourOfWeek: hour }), 500);
+}
+
+function mountWheels(): void {
+  const dayBox = $('wheel-day');
+  const hourBox = $('wheel-hour');
+  dayBox.replaceChildren();
+  hourBox.replaceChildren();
+  const day = window.Patchday.mountWheel(dayBox, {
+    items: t().days.map((label, value) => ({ value, label })),
+    value: Math.floor(settings.hourOfWeek / 24),
+    label: t().wheelDay,
+    rowHeight: 36,
+    onChange(value) {
+      setHour(value * 24 + (settings.hourOfWeek % 24));
+      renderSettings();
       renderOverview();
-      // The system scheduler is only rewritten once the hand rests.
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => void api.saveSettings({ hourOfWeek: hour }), 500);
     },
   });
+  const hour = window.Patchday.mountWheel(hourBox, {
+    items: Array.from({ length: 24 }, (_, value) => ({ value, label: `${String(value).padStart(2, '0')}:00` })),
+    value: settings.hourOfWeek % 24,
+    label: t().wheelTime,
+    rowHeight: 36,
+    onChange(value) {
+      setHour(Math.floor(settings.hourOfWeek / 24) * 24 + value);
+      renderSettings();
+      renderOverview();
+    },
+  });
+  wheels = { day, hour };
 }
 
 // ---------- Shell ----------
 
 function renderText(): void {
   document.documentElement.lang = settings.language;
+  document.documentElement.dataset.theme = settings.appearance ?? 'system';
   all('[data-i18n]').forEach((node) => {
     node.textContent = t()[node.dataset.i18n as keyof typeof STRINGS.en] as string;
   });
@@ -299,8 +334,8 @@ function renderText(): void {
 
 function renderAll(): void {
   renderText();
-  mountDial();
-  renderSchedule();
+  mountWheels();
+  renderSettings();
   renderOverview();
   renderReport();
   views.render();
@@ -390,7 +425,7 @@ async function start(): Promise<void> {
   const toggle = (id: string, read: () => boolean, write: (on: boolean) => Partial<Settings>) => {
     $(id).addEventListener('click', async () => {
       await patch(write(!read()));
-      renderSchedule();
+      renderSettings();
       renderOverview();
     });
   };
@@ -418,9 +453,13 @@ async function start(): Promise<void> {
     hasToken = true;
     renderText();
   });
-  const settingsDialog = $<HTMLDialogElement>('settings');
-  $('settings-open').addEventListener('click', () => settingsDialog.showModal());
-  $('settings-close').addEventListener('click', () => settingsDialog.close());
+  all('[data-appearance]').forEach((node) => {
+    node.addEventListener('click', async () => {
+      await patch({ appearance: node.dataset.appearance as Settings['appearance'] });
+      renderText();
+      renderSettings();
+    });
+  });
 
   const confirm = $<HTMLDialogElement>('confirm');
   all('[data-action]').forEach((node) => {

@@ -57,4 +57,7 @@ jobs:
 
           Builds are not signed yet, so Windows and macOS show a warning. The README explains how to open the app.
           NOTES
-          gh release create "$GITHUB_REF_NAME" assets/* --title "Patchday $GITHUB_REF_NAME" --notes-file notes.md --prerelease
+          # A draft is invisible to the app's updater. It goes public only once every file is uploaded,
+          # so nobody downloads a file that is still arriving or checks it against the wrong manifest.
+          gh release create "$GITHUB_REF_NAME" assets/* --title "Patchday $GITHUB_REF_NAME" --notes-file notes.md --prerelease --draft
+          gh release edit "$GITHUB_REF_NAME" --draft=false

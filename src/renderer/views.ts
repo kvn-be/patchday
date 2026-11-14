@@ -12,6 +12,7 @@ export interface PackageApi {
   onPackageProgress(listener: (result: { index: number; total: number }) => void): void;
   skip(key: string, version: string): Promise<Settings>;
   history(): Promise<HistoryEntry[]>;
+  exportLogs(): Promise<boolean>;
   exportPackages(packages: Package[]): Promise<number | null>;
   importPackages(): Promise<{ packages: Package[]; skipped: number } | null>;
 }
@@ -71,6 +72,7 @@ export function createViews(ctx: ViewContext) {
   let importSkipped = 0;
   let history: HistoryEntry[] = [];
   let status = '';
+  let historyStatus = '';
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const t = ctx.t;
@@ -328,7 +330,17 @@ export function createViews(ctx: ViewContext) {
     const h1 = element('h1', '', t().navHistory);
     h1.id = 'history-title';
     titles.append(h1, element('p', '', t().historyLead));
-    head.append(titles);
+    const exportButton = button(t().exportLogs, 'main', async () => {
+      try {
+        if (await ctx.api.exportLogs()) historyStatus = t().logsExported;
+      } catch (error) {
+        historyStatus = `${t().actionFailed} ${clean(error)}`;
+      }
+      renderHistory();
+    }, false);
+    head.append(titles, exportButton);
+    const line = element('p', 'muted progress', historyStatus);
+    line.setAttribute('role', 'status');
     const panel = element('div', 'panel pd-glass');
     if (history.length === 0) panel.append(element('div', 'notes', t().historyEmpty));
     for (const entry of history) {
@@ -344,7 +356,7 @@ export function createViews(ctx: ViewContext) {
       }
       panel.append(node);
     }
-    page.append(head, panel);
+    page.append(head, line, panel);
   }
 
   return {

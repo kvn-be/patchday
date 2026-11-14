@@ -21,18 +21,19 @@ Use 24-hour time in both languages. Write versions as `3.4.0 → 3.4.1`. Keep pr
 
 ## Navigation
 
-- One `Sidebar` with five places in a fixed order: Overview, Updates, Packages, Schedule, History. Settings, language and coffee sit at its foot.
+- One `Sidebar` with four places in a fixed order: Overview, Updates, Packages, History. Settings, language and coffee sit at its foot.
+- Day and time of the weekly run are two `Wheel`s on Overview. There is no separate schedule page.
 - Every page has the same head: title in `display`, one sentence in `ink-2`, the main action on the right. At most one `pd-btn-main` in a page head.
 - Every list uses `ListRow`: icon, name with source, version, status or actions. Group rows under a `pd-list-head` with a count, what needs you first.
 - Actions sit in the row as buttons. No hidden menus, no right-click.
-- Settings that are switches save by themselves. Only Portainer and the Windows admin access live in the Settings dialog.
+- Settings save by themselves. The Settings page holds the run switches, the Never update list, the appearance, Portainer and the Windows admin access.
 
 ## Color and material
 
-- One theme: Liquid Glass. There is no dark theme.
+- Two themes, light and dark Liquid Glass, chosen in Settings: system, light or dark. Every colour is a token with both values; components never hard-code a surface colour.
 - The page is `ground` with the four blurred shapes of `Ground`. Content always sits on `Glass`: `glass` fill, 30px blur, `glass-edge`, `shadow-glass`.
 - Text is `ink`, secondary text `ink-2`, small notes `ink-3`. All pass 4.5:1 on the lightest glass.
-- Actions are solid: `ink` with `on-ink` for main, `glass-strong` with `control-edge` for secondary. Never a glass button.
+- Actions are solid: `ink` with `on-ink` for main, `glass-strong` with `control-edge` for secondary. Never a glass button. In the dark theme `ink` turns light, so the main button becomes a light pill.
 - `brass` is the only ornament: the logo, the dial hand and the focus ring. `coffee` fills the coffee button and nothing else.
 - `ok`, `wait` and `back` mean status only, always with a word. A good-time hint uses `ok`, a daytime warning `back`.
 
@@ -53,7 +54,8 @@ Use 24-hour time in both languages. Write versions as `3.4.0 → 3.4.1`. Keep pr
 
 - The ground drifts against the pointer at four depths, up to 36px, 1.1 seconds ease-out. Nothing sits on the pointer itself, and glass never moves.
 - Buttons lift 1px on hover and give to 0.97 on press. Switches slide in 0.2 seconds.
-- The dial hand sweeps to the chosen time on load.
+- Wheels glide to a row and snap; neighbours tilt away and fade.
+- `Steps` pop each reached hub and draw its ring; the running phase fills its bar slowly.
 - Respect `prefers-reduced-motion`: the ground stays still, buttons do not move, and the end state shows at once.
 
 ## Focus

@@ -6,7 +6,8 @@ import { diagnoseBrew, diagnoseChoco, diagnoseScoop, diagnoseWinget, type Diagno
 import { decide, type Decision } from '../core/policy.ts';
 import { latestTag } from '../core/version.ts';
 import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
-import { isSkipped, parseScoopStatus, scoopCommand, WINGET_FLAGS, wingetTarget } from '../core/packages.ts';
+import { isSkipped, parseScoopStatus, repairPlan, scoopCommand, WINGET_FLAGS, wingetTarget, type Package } from '../core/packages.ts';
+import { installWithRepair as repairLadder, lastLines, runSequence } from './repair.ts';
 import type { PortainerClient, PortainerStack } from './portainer.ts';
 import type { Exec, ExecResult, ItemSource, Phase, ProgressItem, Report, ReportItem, Settings } from './types.ts';
 
@@ -36,7 +37,6 @@ interface ImagePlan {
 
 const HEALTH_LIMIT_MS = 5 * 60_000;
 const HEALTH_POLL_MS = 10_000;
-const RETRY_WAIT_MS = 60_000;
 export const BREW_ENV = { HOMEBREW_NO_ENV_HINTS: '1', HOMEBREW_NO_AUTO_UPDATE: '1', NONINTERACTIVE: '1' };
 
 interface Tracker {
@@ -256,10 +256,7 @@ function packageItem(source: ItemSource, name: string, from: string, to: string,
   return { source, name, from, to, outcome, reason, ...(detail ? { detail } : {}) };
 }
 
-export function lastLines(result: ExecResult): string {
-  const lines = `${result.stdout}\n${result.stderr}`.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !/^[-\\|/ ]+$/.test(line));
-  return lines.slice(-12).join('\n').slice(0, 1500);
-}
+export { lastLines };
 
 async function waitForDocker(deps: Deps): Promise<boolean> {
   const started = deps.now().getTime();
@@ -280,25 +277,25 @@ interface Attempt {
   install(force: boolean): Promise<ExecResult>;
   diagnose(result: ExecResult): Diagnosis;
   refresh(): Promise<unknown>;
+  reinstall?(): Promise<ExecResult>;
 }
 
-// One automatic repair per package: more would hide a real problem and stall the run.
-async function installWithRepair(deps: Deps, tracker: Tracker, source: ItemSource, name: string, attempt: Attempt): Promise<PackageResult> {
-  tracker.step(source, name, 'update', null);
-  const first = await attempt.install(false);
-  if (first.code === 0) return { ok: true, reason: '' };
-  const diagnosis = attempt.diagnose(first);
-  if (diagnosis.applied) return { ok: true, reason: diagnosis.reason };
-  if (!diagnosis.fix) return { ok: false, reason: diagnosis.reason, detail: lastLines(first) };
+function installWithRepair(deps: Deps, tracker: Tracker, source: ItemSource, name: string, attempt: Attempt): Promise<PackageResult> {
+  return repairLadder({
+    ...attempt,
+    name,
+    sleep: deps.sleep,
+    log: deps.log,
+    onPhase: (phase) => tracker.step(source, name, phase, null),
+  });
+}
 
-  deps.log(`${name}: ${diagnosis.reason}, trying again`);
-  tracker.step(source, name, 'retry', null);
-  if (diagnosis.fix === 'wait-retry') await deps.sleep(RETRY_WAIT_MS);
-  if (diagnosis.fix === 'refresh-retry') await attempt.refresh();
-  const second = await attempt.install(diagnosis.fix === 'force-retry');
-  if (second.code === 0) return { ok: true, reason: '' };
-  const after = attempt.diagnose(second);
-  return { ok: Boolean(after.applied), reason: after.reason, detail: lastLines(second) };
+function repairCommands(deps: Deps, entry: Pick<Package, 'manager' | 'id' | 'kind'>, env?: Record<string, string>): () => Promise<ExecResult> {
+  const plan = repairPlan(entry);
+  return async () => {
+    await runSequence(deps.exec, plan.clean, 30 * 60_000, env);
+    return runSequence(deps.exec, plan.reinstall, 60 * 60_000, env);
+  };
 }
 
 const NO_CHANGE = 'installer finished, but the version did not change';
@@ -321,6 +318,7 @@ async function applyBrew(deps: Deps, tracker: Tracker, open: OutdatedPackage[], 
         await deps.exec('brew', ['cleanup', entry.name], { env: BREW_ENV });
         await deps.exec('brew', ['update'], { timeoutMs: 10 * 60_000, env: BREW_ENV });
       },
+      reinstall: repairCommands(deps, { manager: 'brew', id: entry.name, kind: entry.kind }, BREW_ENV),
     });
     results.set(entry.name, result);
     if (restartsDocker(entry) && !(await waitForDocker(deps))) notes.push('Docker did not come back within 5 minutes.');
@@ -363,6 +361,7 @@ async function applyWinget(deps: Deps, tracker: Tracker, open: WingetPackage[], 
       install: (force) => deps.exec('winget', [force ? 'install' : 'upgrade', ...target, ...(force ? ['--force'] : []), '--silent', '--accept-package-agreements', ...WINGET_FLAGS], { timeoutMs: 30 * 60_000 }),
       diagnose: (failed) => diagnoseWinget(failed.code, `${failed.stdout}\n${failed.stderr}`),
       refresh: () => deps.exec('winget', ['source', 'update'], { timeoutMs: 5 * 60_000 }),
+      reinstall: repairCommands(deps, { manager: 'winget', id: entry.id }),
     });
     results.set(entry.id, result);
   }
@@ -398,7 +397,9 @@ async function applyChoco(deps: Deps, tracker: Tracker, open: ChocoPackage[], se
     const result = await installWithRepair(deps, tracker, 'choco', entry.name, {
       install: (force) => deps.exec('choco', ['upgrade', entry.name, '-y', '--no-progress', ...(force ? ['--force'] : [])], { timeoutMs: 30 * 60_000 }),
       diagnose: (failed) => diagnoseChoco(failed.code, `${failed.stdout}\n${failed.stderr}`),
-      refresh: async () => {},
+      refresh: () => deps.exec('choco', ['cache', 'remove', '-y'], { timeoutMs: 5 * 60_000 }),
+      // Scheduled runs on Windows already hold admin rights, so Chocolatey runs directly here.
+      reinstall: () => deps.exec('choco', ['install', entry.name, '-y', '--force', '--no-progress'], { timeoutMs: 30 * 60_000 }),
     });
     results.set(entry.name, result);
   }
@@ -434,7 +435,8 @@ async function applyScoop(deps: Deps, tracker: Tracker, open: ScoopUpdate[]): Pr
     const result = await installWithRepair(deps, tracker, 'scoop', entry.id, {
       install: () => scoop(deps, ['update', entry.id], 30 * 60_000),
       diagnose: (failed) => diagnoseScoop(`${failed.stdout}\n${failed.stderr}`),
-      refresh: async () => {},
+      refresh: () => scoop(deps, ['update'], 10 * 60_000),
+      reinstall: repairCommands(deps, { manager: 'scoop', id: entry.id }),
     });
     results.set(entry.id, result);
   }

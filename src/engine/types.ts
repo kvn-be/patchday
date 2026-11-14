@@ -22,7 +22,7 @@ export interface Report {
 }
 
 export type ProgressState = 'queued' | 'running' | 'done' | 'failed';
-export type Phase = 'backup' | 'update' | 'test' | 'rollback' | 'retry';
+export type Phase = 'backup' | 'update' | 'test' | 'rollback' | 'retry' | 'reinstall';
 
 export interface ProgressItem {
   id: string;
@@ -44,7 +44,9 @@ export interface Settings {
   autoMinor: boolean;
   holds: string[];
   language: 'en' | 'de';
+  // Kept for old settings files; the app reads appearance.
   theme: 'dark' | 'light';
+  appearance: 'system' | 'light' | 'dark';
   portainerUrl: string;
   adminAsked: boolean;
   // Versions the user chose to skip, by manager:id.
@@ -62,6 +64,7 @@ export const DEFAULT_SETTINGS: Settings = {
   holds: [],
   language: 'en',
   theme: 'dark',
+  appearance: 'system',
   portainerUrl: '',
   adminAsked: false,
   skipped: {},

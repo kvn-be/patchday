@@ -7,4 +7,4 @@ The consumer provides an SVG, a range input and the chosen hour of the week (0 i
 - Always pair the dial with a range input. It gives keyboard and screen reader access.
 - The arcs mark the quiet hours, 00:00 to 06:00. Outside them, show a note in `back` that updates can restart running apps; inside, a note in `ok`.
 - Show the day and time in the centre, and repeat the next run in a sentence below.
-- The large dial lives on the Schedule page. Overview shows a small, static one with the hand and the time.
+- The app picks day and time with two `Wheel`s now. The dial stays the signature for covers and illustrations, and for any place that needs the whole week at a glance.

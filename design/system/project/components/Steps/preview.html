@@ -1,0 +1,24 @@
+<!-- @dsCard group="Status" height=200 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Steps</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Instrument+Sans:wght@400..600&display=swap"></head>
+<body>
+<div style="position:relative;min-height:200px;padding:24px;box-sizing:border-box">
+<div style="position:absolute;inset:0;overflow:hidden;pointer-events:none"><i class="pd-blob pd-blob-1" style="left:-80px;top:40px;width:300px;height:260px;filter:blur(60px)"></i><i class="pd-blob pd-blob-2" style="left:240px;top:-80px;width:280px;height:220px;filter:blur(60px)"></i><i class="pd-blob pd-blob-3" style="left:520px;top:60px;width:260px;height:220px;filter:blur(60px)"></i></div>
+<div style="position:relative">
+<div class="pd-glass" style="border-radius:var(--radius-panel);padding:18px 22px;display:grid;gap:16px;max-width:460px">
+  <div style="display:flex;align-items:center;gap:14px"><span id="a"></span><span class="pd-pill pd-pill-plain">Testing</span></div>
+  <div style="display:flex;align-items:center;gap:14px"><span id="b"></span><span class="pd-pill pd-pill-ok">Applied</span></div>
+  <div style="display:flex;align-items:center;gap:14px"><span id="c"></span><span class="pd-pill pd-pill-back">Failed</span></div>
+</div>
+</div>
+</div>
+<script>
+  var a = window.Patchday.mountSteps(document.getElementById('a'), { steps: 4, label: 'nginx: testing' });
+  window.Patchday.mountSteps(document.getElementById('b'), { steps: 3, current: 2, state: 'done', label: 'jq: applied' });
+  window.Patchday.mountSteps(document.getElementById('c'), { steps: 3, current: 1, state: 'failed', label: 'git: failed' });
+  var step = 0;
+  setInterval(function () { a.set(step, step === 3 ? 'done' : 'running', 'nginx'); step = (step + 1) % 5; }, 1400);
+</script>
+</body>
+</html>

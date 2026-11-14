@@ -1,16 +1,18 @@
 import { parseChocoOutdated } from '../core/choco.ts';
 import { diagnoseBrew, diagnoseElevated, diagnoseScoop, diagnoseWinget, type Diagnosis } from '../core/failures.ts';
 import {
-  actionCommand, isSafeQuery, packageKey, parseBrewInstalled, parseBrewSearch, parseChocoPairs, parseScoopExport,
+  actionCommand, isSafeQuery, packageKey, repairPlan, parseBrewInstalled, parseBrewSearch, parseChocoPairs, parseScoopExport,
   parseScoopSearch, parseScoopStatus, parseWingetList, parseWingetSearch, scoopCommand, WINGET_FLAGS,
   type Manager, type Package, type PackageAction,
 } from '../core/packages.ts';
 import { BREW_ENV, lastLines } from './run.ts';
+import { installWithRepair, runSequence } from './repair.ts';
 import type { Exec, ExecResult } from './types.ts';
 
 export interface PackageDeps {
   exec: Exec;
   platform: NodeJS.Platform;
+  sleep?(ms: number): Promise<void>;
 }
 
 export interface Inventory {
@@ -139,24 +141,40 @@ function diagnose(manager: Manager, result: ExecResult): Diagnosis {
 }
 
 // One package at a time: installers of different managers must not run side by side.
+// Installs and updates repair themselves like scheduled runs do; removals run once.
 export async function act(
   deps: PackageDeps,
   action: PackageAction,
   packages: Package[],
   onResult: (result: ActionResult, index: number) => void = () => {},
+  onPhase: (phase: string, index: number) => void = () => {},
 ): Promise<ActionResult[]> {
   const results: ActionResult[] = [];
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   for (const [index, entry] of packages.entries()) {
     const key = packageKey(entry);
+    const env = entry.manager === 'brew' ? BREW_ENV : undefined;
     let result: ActionResult;
     try {
       const command = actionCommand(action, entry);
-      const output = await deps.exec(command.command, command.args, { timeoutMs: 60 * 60_000, ...(entry.manager === 'brew' ? { env: BREW_ENV } : {}) });
-      if (output.code === 0) {
-        result = { key, ok: true, reason: '' };
+      const once = () => deps.exec(command.command, command.args, { timeoutMs: 60 * 60_000, ...(env ? { env } : {}) });
+      if (action === 'uninstall') {
+        const output = await once();
+        const diagnosis = output.code === 0 ? null : diagnose(entry.manager, output);
+        result = !diagnosis ? { key, ok: true, reason: '' } : diagnosis.applied ? { key, ok: true, reason: diagnosis.reason } : { key, ok: false, reason: diagnosis.reason, detail: lastLines(output) };
       } else {
-        const diagnosis = diagnose(entry.manager, output);
-        result = diagnosis.applied ? { key, ok: true, reason: diagnosis.reason } : { key, ok: false, reason: diagnosis.reason, detail: lastLines(output) };
+        const plan = repairPlan(entry);
+        const repaired = await installWithRepair({
+          name: entry.name,
+          install: () => once(),
+          diagnose: (output) => diagnose(entry.manager, output),
+          refresh: () => runSequence(deps.exec, plan.clean, 30 * 60_000, env),
+          reinstall: () => runSequence(deps.exec, plan.reinstall, 60 * 60_000, env),
+          sleep,
+          log: () => {},
+          onPhase: (phase) => onPhase(phase, index),
+        });
+        result = { key, ...repaired };
       }
     } catch (error) {
       result = { key, ok: false, reason: (error as Error).message };

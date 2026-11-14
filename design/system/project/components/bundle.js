@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Patchday","components":[{"name":"Button"},{"name":"Glass"},{"name":"Ground"},{"name":"ListRow"},{"name":"Pill"},{"name":"ProgressBar"},{"name":"Segmented"},{"name":"Sidebar"},{"name":"Switch"},{"name":"WeekDial"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Patchday","components":[{"name":"Button"},{"name":"Glass"},{"name":"Ground"},{"name":"ListRow"},{"name":"Pill"},{"name":"ProgressBar"},{"name":"Segmented"},{"name":"Sidebar"},{"name":"Switch"},{"name":"Steps"},{"name":"WeekDial"},{"name":"Wheel"}]} */
 (function () {
   // Components are plain CSS classes from bundle.css. Only the dial needs a script.
   function mountWeekDial(dial, slider, options) {
@@ -63,5 +63,133 @@
     document.documentElement.addEventListener('pointerleave', rest);
     return function stop() { window.removeEventListener('pointermove', move); document.documentElement.removeEventListener('pointerleave', rest); rest(); };
   }
-  window.Patchday = { mountWeekDial: mountWeekDial, startParallax: startParallax };
+  // A drum of choices: the chosen one sits in the band in the middle, its neighbours tilt away and fade.
+  // items: [{ value, label }]. Returns { set(value, animate), get() }.
+  function mountWheel(root, options) {
+    var opt = options || {}, items = opt.items || [], ROW = opt.rowHeight || 44;
+    var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var list = document.createElement('div');
+    list.className = 'pd-wheel-list';
+    list.setAttribute('role', 'listbox');
+    list.setAttribute('tabindex', '0');
+    if (opt.label) list.setAttribute('aria-label', opt.label);
+    var id = 'pd-wheel-' + Math.random().toString(36).slice(2, 8);
+    var nodes = items.map(function (item, i) {
+      var node = document.createElement('div');
+      node.className = 'pd-wheel-item';
+      node.id = id + '-' + i;
+      node.setAttribute('role', 'option');
+      node.textContent = item.label;
+      node.addEventListener('click', function () { go(i, true); });
+      list.appendChild(node);
+      return node;
+    });
+    root.classList.add('pd-wheel');
+    root.style.setProperty('--pd-row', ROW + 'px');
+    root.appendChild(list);
+
+    var index = Math.max(0, indexOf(opt.value));
+    var frame = 0, settle = 0, lastSent = index, placed = false;
+    function indexOf(value) { for (var i = 0; i < items.length; i++) if (items[i].value === value) return i; return -1; }
+    // A wheel mounted inside a hidden page has no height yet; it takes its place once it shows.
+    function place() {
+      if (!list.clientHeight) return;
+      list.scrollTop = index * ROW;
+      placed = true;
+      paint();
+    }
+    function paint() {
+      frame = 0;
+      if (!placed) return;
+      var center = list.scrollTop / ROW;
+      nodes.forEach(function (node, i) {
+        var d = i - center, far = Math.min(Math.abs(d), 3);
+        node.style.opacity = String(Math.max(0, 1 - far * 0.3));
+        node.style.transform = still ? '' : 'rotateX(' + (-d * 18).toFixed(1) + 'deg) scale(' + (1 - far * 0.06).toFixed(3) + ')';
+      });
+      var nearest = Math.max(0, Math.min(items.length - 1, Math.round(center)));
+      if (nearest !== index) { index = nearest; mark(); }
+    }
+    function mark() {
+      nodes.forEach(function (node, i) { node.setAttribute('aria-selected', String(i === index)); });
+      list.setAttribute('aria-activedescendant', nodes[index] ? nodes[index].id : '');
+    }
+    function commit() {
+      settle = 0;
+      if (!placed) return;
+      // Snap exactly onto the row, then report once.
+      if (Math.abs(list.scrollTop - index * ROW) > 1) list.scrollTo({ top: index * ROW, behavior: still ? 'auto' : 'smooth' });
+      if (index !== lastSent) { lastSent = index; if (opt.onChange) opt.onChange(items[index].value); }
+    }
+    function go(i, animate) {
+      index = Math.max(0, Math.min(items.length - 1, i));
+      mark();
+      if (!placed) return;
+      list.scrollTo({ top: index * ROW, behavior: animate && !still ? 'smooth' : 'auto' });
+      clearTimeout(settle);
+      settle = setTimeout(commit, animate && !still ? 380 : 0);
+    }
+    list.addEventListener('scroll', function () {
+      if (!placed) return;
+      if (!frame) frame = requestAnimationFrame(paint);
+      clearTimeout(settle);
+      settle = setTimeout(commit, 140);
+    });
+    list.addEventListener('keydown', function (event) {
+      var step = { ArrowDown: 1, ArrowUp: -1, PageDown: 3, PageUp: -3 }[event.key];
+      if (step) { event.preventDefault(); go(index + step, true); }
+      else if (event.key === 'Home') { event.preventDefault(); go(0, true); }
+      else if (event.key === 'End') { event.preventDefault(); go(items.length - 1, true); }
+    });
+    mark();
+    if (window.ResizeObserver) new ResizeObserver(function () { if (!placed || !settle) place(); }).observe(list);
+    requestAnimationFrame(place);
+    return {
+      set: function (value, animate) { var i = indexOf(value); if (i >= 0 && i !== index) { lastSent = i; go(i, animate); } },
+      get: function () { return items[index] ? items[index].value : undefined; },
+    };
+  }
+  // Phases of one update as hubs and bars. set(current, state): current is the index of the running
+  // phase (-1 before it starts, steps - 1 when finished), state is 'running', 'done' or 'failed'.
+  function mountSteps(root, options) {
+    var NS = 'http://www.w3.org/2000/svg', opt = options || {}, n = Math.max(2, opt.steps || 4), GAP = 60;
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'pd-steps');
+    svg.setAttribute('viewBox', '0 0 ' + ((n - 1) * GAP + 24) + ' 24');
+    svg.setAttribute('width', String(((n - 1) * GAP + 24) * (opt.scale || 0.7)));
+    svg.setAttribute('role', 'img');
+    function el(tag, attrs) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; }
+    var parts = [];
+    for (var i = 0; i < n; i++) {
+      var x = 12 + i * GAP, part = {};
+      part.dot = el('circle', { 'class': 'dot', cx: x, cy: 12 });
+      if (i < n - 1) el('line', { 'class': 'bar', x1: x + 10, y1: 12, x2: x + 50, y2: 12 });
+      part.hub = el('circle', { 'class': 'hub', cx: x, cy: 12 });
+      if (i < n - 1) part.bar = el('line', { 'class': 'bar-fill', x1: x + 10, y1: 12, x2: x + 50, y2: 12 });
+      part.fill = el('circle', { 'class': 'hub-fill', cx: x, cy: 12, r: 10, transform: 'rotate(180,' + x + ',12)' });
+      parts.push(part);
+    }
+    root.appendChild(svg);
+    function set(current, state, label) {
+      svg.classList.toggle('is-done', state === 'done');
+      if (label) svg.setAttribute('aria-label', label);
+      parts.forEach(function (part, i) {
+        var reached = state === 'done' ? true : i <= current;
+        part.dot.classList.toggle('done', reached);
+        part.hub.classList.toggle('done', reached);
+        part.fill.classList.toggle('done', reached);
+        var failing = state === 'failed' && i === Math.max(0, current);
+        part.fill.classList.toggle('fail', failing);
+        part.dot.classList.toggle('fail', failing);
+        if (part.bar) {
+          var full = state === 'done' || i < current;
+          part.bar.classList.toggle('full', full);
+          part.bar.classList.toggle('active', !full && state === 'running' && i === current);
+        }
+      });
+    }
+    set(opt.current === undefined ? -1 : opt.current, opt.state || 'running', opt.label);
+    return { element: svg, set: set };
+  }
+  window.Patchday = { mountWeekDial: mountWeekDial, startParallax: startParallax, mountWheel: mountWheel, mountSteps: mountSteps };
 })();

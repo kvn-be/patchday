@@ -1,6 +1,6 @@
 # Ground
 
-The light ground behind all glass: four blurred shapes in `shape-periwinkle`, `shape-sky`, `shape-sand` and `shape-rose` on `ground`.
+The ground behind all glass: four blurred shapes in `shape-periwinkle`, `shape-sky`, `shape-sand` and `shape-rose` on `ground`. In the dark theme the same shapes glow deep and quiet.
 
 The consumer provides one `pd-ground` as the first child of the page with four `pd-blob pd-blob-1` … `pd-blob-4` inside, marked `aria-hidden="true"`, and calls `Patchday.startParallax()` once.
 

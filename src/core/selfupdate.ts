@@ -1,6 +1,7 @@
 export interface ReleaseAsset {
   name: string;
   url: string;
+  size?: number;
 }
 
 export interface Release {
@@ -11,7 +12,15 @@ export interface Release {
 interface GitHubRelease {
   tag_name: string;
   draft: boolean;
-  assets: Array<{ name: string; browser_download_url: string }>;
+  assets: Array<{ name: string; browser_download_url: string; size?: number; state?: string }>;
+}
+
+// The files an update needs on this system. A release without them, or with a file still
+// uploading, is skipped, so a half published release never reaches anyone.
+export function requiredAssets(platform: NodeJS.Platform, arch: string, version: string): string[] {
+  if (platform === 'darwin') return ['latest-mac.yml', `Patchday-${version}-${arch}.zip`];
+  if (platform === 'win32') return ['latest.yml', `Patchday-Setup-${version}.exe`];
+  return [];
 }
 
 function parts(version: string): number[] | null {
@@ -29,17 +38,33 @@ export function isNewer(candidate: string, current: string): boolean {
   return false;
 }
 
-export function pickRelease(releases: GitHubRelease[], current: string): Release | null {
+export function pickRelease(releases: GitHubRelease[], current: string, needs: (version: string) => string[] = () => []): Release | null {
   let best: GitHubRelease | null = null;
   for (const release of releases) {
     if (release.draft || !isNewer(release.tag_name, best?.tag_name ?? current)) continue;
+    if (release.assets.some((asset) => asset.state !== undefined && asset.state !== 'uploaded')) continue;
+    const names = new Set(release.assets.map((asset) => asset.name));
+    if (!needs(release.tag_name.replace(/^v/, '')).every((name) => names.has(name))) continue;
     best = release;
   }
   if (!best) return null;
   return {
     version: best.tag_name.replace(/^v/, ''),
-    assets: best.assets.map((asset) => ({ name: asset.name, url: asset.browser_download_url })),
+    assets: best.assets.map((asset) => ({ name: asset.name, url: asset.browser_download_url, ...(asset.size ? { size: asset.size } : {}) })),
   };
+}
+
+// The size latest-mac.yml lists for a file, to tell a cut download from a changed one.
+export function macSize(yml: string, fileName: string): number | null {
+  const lines = yml.split('\n');
+  const start = lines.findIndex((line) => line.trim() === `- url: ${fileName}`);
+  if (start < 0) return null;
+  for (const line of lines.slice(start + 1)) {
+    if (/^\s*- url:/.test(line) || /^\S/.test(line)) return null;
+    const match = /^\s*size:\s*(\d+)/.exec(line);
+    if (match) return Number(match[1]);
+  }
+  return null;
 }
 
 // latest-mac.yml lists every file with its checksum. Only those two fields are needed.

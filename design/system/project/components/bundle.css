@@ -21,8 +21,8 @@ body { margin: 0; background: var(--ground); color: var(--ink); font: 400 15px/1
 .pd-btn:disabled { opacity: .45; cursor: not-allowed; }
 .pd-btn-main { background: var(--ink); color: var(--on-ink); border-color: var(--ink); box-shadow: var(--shadow-ink); }
 .pd-btn-main:hover:not(:disabled) { background: var(--ink-hover); }
-.pd-btn-line { background: var(--glass-strong); color: var(--ink); border-color: var(--control-edge); box-shadow: inset 0 1px 0 #ffffff; }
-.pd-btn-line:hover:not(:disabled) { background: #ffffff; border-color: var(--ink-3); }
+.pd-btn-line { background: var(--glass-strong); color: var(--ink); border-color: var(--control-edge); box-shadow: inset 0 1px 0 var(--highlight); }
+.pd-btn-line:hover:not(:disabled) { background: var(--selected); border-color: var(--ink-3); }
 .pd-btn-coffee { background: var(--coffee); color: var(--on-brass); border-color: var(--coffee-edge); }
 .pd-btn-small { min-height: 36px; padding: 0 14px; font-size: 14px; }
 .pd-btn-icon { width: 44px; padding: 0; }
@@ -36,15 +36,15 @@ body { margin: 0; background: var(--ground); color: var(--ink); font: 400 15px/1
 .pd-pill-plain { color: var(--ink-2); border: 1px solid var(--control-edge); }
 
 /* Switch: a button with role="switch" and aria-checked. */
-.pd-switch { position: relative; width: 46px; height: 28px; flex: none; padding: 0; border: 0; border-radius: var(--radius-full); background: rgba(14, 19, 48, .22); cursor: pointer; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .2); transition: background-color .2s; }
-.pd-switch span { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #ffffff; box-shadow: 0 2px 6px rgba(14, 19, 48, .35); transition: left .2s; }
-.pd-switch[aria-checked="true"] { background: var(--ink); }
+.pd-switch { position: relative; width: 46px; height: 28px; flex: none; padding: 0; border: 0; border-radius: var(--radius-full); background: var(--track); cursor: pointer; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .2); transition: background-color .2s; }
+.pd-switch span { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #ffffff; box-shadow: 0 2px 6px var(--shadow-color); transition: left .2s; }
+.pd-switch[aria-checked="true"] { background: var(--switch-on); }
 .pd-switch[aria-checked="true"] span { left: 21px; }
 
 /* Segmented: language, filters. The chosen part is solid white. */
-.pd-segmented { display: inline-flex; gap: 2px; padding: 4px; border-radius: var(--radius-full); background: rgba(255, 255, 255, .55); border: 1px solid rgba(14, 19, 48, .12); align-self: flex-start; }
+.pd-segmented { display: inline-flex; gap: 2px; padding: 4px; border-radius: var(--radius-full); background: var(--segment-bg); border: 1px solid var(--tile-edge); align-self: flex-start; }
 .pd-segmented button { min-height: 34px; padding: 0 14px; border: 0; border-radius: var(--radius-full); background: none; color: var(--ink-2); font: 600 14px/1 var(--font-text); cursor: pointer; }
-.pd-segmented button[aria-pressed="true"], .pd-segmented button[aria-selected="true"] { background: #ffffff; color: var(--ink); box-shadow: 0 2px 10px -3px rgba(14, 19, 48, .3); }
+.pd-segmented button[aria-pressed="true"], .pd-segmented button[aria-selected="true"] { background: var(--selected); color: var(--ink); box-shadow: 0 2px 10px -3px var(--shadow-color); }
 .pd-segmented-small button { min-height: 30px; padding: 0 10px; font-size: 13px; }
 
 /* Sidebar: the one way to move. */
@@ -54,8 +54,8 @@ body { margin: 0; background: var(--ground); color: var(--ink); font: 400 15px/1
 .pd-brand b { font: 500 24px/1 var(--font-display); }
 .pd-nav { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 0 14px; border: 0; border-radius: var(--radius-control); background: none; color: var(--ink-2); font: 600 15px/1 var(--font-text); text-align: left; text-decoration: none; cursor: pointer; transition: background-color .2s, color .2s; }
 .pd-nav svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.pd-nav:hover { background: rgba(255, 255, 255, .55); color: var(--ink); }
-.pd-nav[aria-current="page"] { background: #ffffff; color: var(--ink); box-shadow: 0 4px 14px -6px rgba(14, 19, 48, .35), inset 0 1px 0 #ffffff; }
+.pd-nav:hover { background: var(--hover); color: var(--ink); }
+.pd-nav[aria-current="page"] { background: var(--selected); color: var(--ink); box-shadow: 0 4px 14px -6px var(--shadow-color), inset 0 1px 0 var(--highlight); }
 .pd-count { margin-left: auto; min-width: 24px; padding: 3px 8px; border-radius: var(--radius-full); background: var(--ink); color: var(--on-ink); font-size: 12px; text-align: center; }
 .pd-count[hidden] { display: none; }
 
@@ -69,9 +69,9 @@ body { margin: 0; background: var(--ground); color: var(--ink); font: 400 15px/1
 .pd-list-head { padding: 14px 24px 8px; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--ink-2); }
 .pd-item { display: grid; grid-template-columns: 40px minmax(0, 1.2fr) minmax(0, .9fr) minmax(0, 1.1fr); gap: 4px 16px; align-items: center; padding: 10px 24px; border-top: 1px solid var(--hairline); transition: background-color .2s; }
 .pd-list-head + .pd-item { border-top: 0; }
-.pd-item:hover { background: rgba(255, 255, 255, .6); }
-.pd-item .icon { width: 40px; height: 40px; border-radius: var(--radius-field); display: grid; place-items: center; background: rgba(255, 255, 255, .85); border: 1px solid rgba(14, 19, 48, .1); font-weight: 700; font-size: 16px; }
-.pd-item .icon.new { background: rgba(255, 255, 255, .5); border-style: dashed; border-color: rgba(14, 19, 48, .25); color: var(--ink-2); }
+.pd-item:hover { background: var(--hover); }
+.pd-item .icon { width: 40px; height: 40px; border-radius: var(--radius-field); display: grid; place-items: center; background: var(--tile); border: 1px solid var(--tile-edge); font-weight: 700; font-size: 16px; }
+.pd-item .icon.new { background: transparent; border-style: dashed; border-color: var(--dashed-edge); color: var(--ink-2); }
 .pd-item .name { display: grid; min-width: 0; }
 .pd-item .name span, .pd-item .name small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pd-item .name span { font-weight: 600; }
@@ -82,16 +82,16 @@ body { margin: 0; background: var(--ground); color: var(--ink); font: 400 15px/1
 .pd-item .pd-progress, .pd-item .pd-detail { grid-column: 2 / -1; }
 .pd-detail { color: var(--ink-2); font-size: 13px; }
 .pd-detail summary { cursor: pointer; }
-.pd-detail pre { margin: 6px 0 0; padding: 8px; border-radius: 10px; background: rgba(255, 255, 255, .7); font: 12px/1.4 var(--font-code); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.pd-detail pre { margin: 6px 0 0; padding: 8px; border-radius: 10px; background: var(--tile); font: 12px/1.4 var(--font-code); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 
 /* Fields and chips */
 .pd-field { display: grid; gap: 4px; color: var(--ink-2); font-size: 14px; }
-.pd-field input, input.pd-input { min-height: 38px; padding: 0 12px; border: 1px solid rgba(14, 19, 48, .22); border-radius: var(--radius-field); background: var(--glass-strong); color: var(--ink); font: 15px var(--font-text); }
-.pd-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 6px 0 12px; border-radius: var(--radius-full); background: rgba(255, 255, 255, .85); border: 1px solid rgba(14, 19, 48, .15); font-size: 14px; }
-.pd-chip button { width: 24px; height: 24px; border: 0; border-radius: 50%; background: rgba(14, 19, 48, .08); color: var(--ink); cursor: pointer; line-height: 1; }
+.pd-field input, input.pd-input { min-height: 38px; padding: 0 12px; border: 1px solid var(--track); border-radius: var(--radius-field); background: var(--glass-strong); color: var(--ink); font: 15px var(--font-text); }
+.pd-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 6px 0 12px; border-radius: var(--radius-full); background: var(--tile); border: 1px solid var(--tile-edge); font-size: 14px; }
+.pd-chip button { width: 24px; height: 24px; border: 0; border-radius: 50%; background: var(--track-soft); color: var(--ink); cursor: pointer; line-height: 1; }
 
 /* Progress */
-.pd-progress { height: 6px; overflow: hidden; border-radius: var(--radius-full); background: rgba(14, 19, 48, .1); }
+.pd-progress { height: 6px; overflow: hidden; border-radius: var(--radius-full); background: var(--track-soft); }
 .pd-progress span { display: block; height: 100%; border-radius: inherit; background: var(--ink); transition: width .3s; }
 .pd-progress-ok span { background: var(--ok); }
 .pd-progress-fail span { background: var(--back); }
@@ -106,17 +106,47 @@ body { margin: 0; background: var(--ground); color: var(--ink); font: 400 15px/1
 .pd-dial .day.on { fill: var(--brass); font-weight: 600; }
 .pd-dial .big { font-family: var(--font-display); font-size: 92px; fill: var(--ink); text-anchor: middle; font-variant-numeric: lining-nums; }
 .pd-dial .sub { font-size: 21px; text-anchor: middle; }
-.pd-dial .tick { stroke: rgba(14, 19, 48, .14); stroke-width: 1.4; }
+.pd-dial .tick { stroke: var(--track-soft); stroke-width: 1.4; }
 .pd-dial .tick.day-start { stroke: var(--ink-2); stroke-width: 2; }
 .pd-dial .tick.past { stroke: var(--brass); }
 .pd-dial .night { fill: none; stroke: var(--wait); stroke-opacity: .4; stroke-width: 5; }
-.pd-dial .ring { fill: rgba(255, 255, 255, .55); stroke: rgba(14, 19, 48, .14); }
-.pd-dial .inner { fill: rgba(255, 255, 255, .72); stroke: rgba(14, 19, 48, .14); }
-.pd-dial .glow { fill: rgba(255, 255, 255, .5); }
+.pd-dial .ring { fill: var(--segment-bg); stroke: var(--track-soft); }
+.pd-dial .inner { fill: var(--tile); stroke: var(--track-soft); }
+.pd-dial .glow { fill: var(--glass); }
 .pd-dial .hand { stroke: var(--brass); stroke-width: 3; stroke-linecap: round; }
 .pd-dial .pin { fill: var(--brass); }
 
+/* Wheel: a drum of choices, five rows tall. The band marks the chosen row. */
+.pd-wheel { position: relative; height: calc(var(--pd-row, 44px) * 5); perspective: 600px; }
+.pd-wheel::before { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - var(--pd-row, 44px) / 2); height: var(--pd-row, 44px); border-radius: var(--radius-control); background: var(--band); border: 1px solid var(--glass-edge); box-shadow: inset 0 1px 0 var(--highlight), 0 6px 16px -10px var(--shadow-color); pointer-events: none; }
+.pd-wheel-list { position: relative; height: 100%; overflow-y: auto; scroll-snap-type: y mandatory; padding-block: calc(var(--pd-row, 44px) * 2); box-sizing: border-box; scrollbar-width: none; -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); outline: none; transform-style: preserve-3d; }
+.pd-wheel-list::-webkit-scrollbar { display: none; }
+.pd-wheel:has(.pd-wheel-list:focus-visible)::before { outline: 3px solid var(--brass); outline-offset: 2px; }
+.pd-wheel-item { height: var(--pd-row, 44px); display: flex; align-items: center; justify-content: center; scroll-snap-align: center; color: var(--ink-2); font: 400 22px/1 var(--font-text); font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; user-select: none; transform-origin: center center; will-change: transform, opacity; }
+.pd-wheel-item[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+
+/* Steps: the phases of one update as hubs joined by bars. A reached hub pops and draws its ring;
+   the bar of the running phase fills slowly; finished turns everything ok, a failure marks its hub back. */
+.pd-steps { display: block; width: auto; height: 24px; overflow: visible; }
+.pd-steps .bar, .pd-steps .hub { fill: none; stroke: var(--track-soft); stroke-width: 4; stroke-linecap: round; }
+.pd-steps .hub { r: 2px; transition: r .2s cubic-bezier(0, 0, .33, 1.67); }
+.pd-steps .hub.done { r: 10px; }
+.pd-steps .bar-fill { fill: none; stroke: var(--ink); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 40 40; stroke-dashoffset: 40; transition: stroke-dashoffset .35s linear, stroke .3s; }
+.pd-steps .bar-fill.active { animation: pd-steps-fill 30s cubic-bezier(.1, .6, .3, 1) forwards; }
+.pd-steps .bar-fill.full { stroke-dashoffset: 0; animation: none; }
+.pd-steps .hub-fill { fill: none; stroke: var(--ink); stroke-width: 4; stroke-dasharray: 0 62.8 0; visibility: hidden; transition: stroke .3s; }
+.pd-steps .hub-fill.done { stroke-dasharray: 31.4 0 31.4; transition: stroke-dasharray .2s .2s ease-out, stroke .3s; visibility: visible; }
+.pd-steps .dot { fill: var(--ink); r: 0; transition: r .2s cubic-bezier(0, 0, .33, 1.67), fill .3s; }
+.pd-steps .dot.done { r: 4px; transition-delay: .4s; }
+.pd-steps.is-done .bar-fill, .pd-steps.is-done .hub-fill { stroke: var(--ok); }
+.pd-steps.is-done .dot { fill: var(--ok); }
+.pd-steps .hub-fill.fail { stroke: var(--back); }
+.pd-steps .dot.fail { fill: var(--back); }
+@keyframes pd-steps-fill { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 6; } }
+
 @media (prefers-reduced-motion: reduce) {
+  .pd-steps .hub, .pd-steps .bar-fill, .pd-steps .hub-fill, .pd-steps .dot { transition: none; }
+  .pd-steps .bar-fill.active { animation: none; stroke-dashoffset: 20; }
   .pd-blob { transform: none; transition: none; }
   .pd-btn, .pd-progress span, .pd-switch, .pd-switch span { transition: none; }
   .pd-btn:hover:not(:disabled), .pd-btn:active:not(:disabled) { transform: none; }

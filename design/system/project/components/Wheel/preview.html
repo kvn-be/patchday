@@ -1,0 +1,22 @@
+<!-- @dsCard group="Controls" height=270 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Wheel</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Instrument+Sans:wght@400..600&display=swap"></head>
+<body>
+<div style="position:relative;min-height:270px;padding:24px;box-sizing:border-box">
+<div style="position:absolute;inset:0;overflow:hidden;pointer-events:none"><i class="pd-blob pd-blob-1" style="left:-80px;top:40px;width:300px;height:260px;filter:blur(60px)"></i><i class="pd-blob pd-blob-2" style="left:240px;top:-80px;width:280px;height:220px;filter:blur(60px)"></i><i class="pd-blob pd-blob-3" style="left:520px;top:60px;width:260px;height:220px;filter:blur(60px)"></i></div>
+<div style="position:relative">
+<div class="pd-glass" style="border-radius:22px;padding:12px 14px;display:inline-grid;grid-template-columns:190px 120px;gap:12px">
+  <div style="display:grid;gap:2px"><span style="font-size:13px;font-weight:600;color:var(--ink-3);text-align:center">Day</span><div id="day"></div></div>
+  <div style="display:grid;gap:2px"><span style="font-size:13px;font-weight:600;color:var(--ink-3);text-align:center">Time</span><div id="hour"></div></div>
+</div>
+</div>
+</div>
+<script>
+  var days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(function (label, value) { return { value: value, label: label }; });
+  var hours = []; for (var h = 0; h < 24; h++) hours.push({ value: h, label: (h < 10 ? '0' : '') + h + ':00' });
+  window.Patchday.mountWheel(document.getElementById('day'), { items: days, value: 6, label: 'Day', rowHeight: 36 });
+  window.Patchday.mountWheel(document.getElementById('hour'), { items: hours, value: 3, label: 'Time', rowHeight: 36 });
+</script>
+</body>
+</html>

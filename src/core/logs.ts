@@ -21,6 +21,50 @@ export const LOG_ROTATE_BYTES = 1024 * 1024;
 const stamp = (iso: string) => iso.replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
 const indent = (text: string, by = '      ') => text.split('\n').map((line) => by + line).join('\n');
 
+// Run logs are written after every run, one file each, named after when the run started.
+export const RUN_LOG_KEEP = 100;
+const RUN_LOG_NAME = /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-(check|update)\.txt$/;
+
+export function runLogName(report: Pick<LogReport, 'startedAt' | 'mode'>): string {
+  return `${report.startedAt.replace(/[:.]/g, '-')}-${report.mode === 'apply' ? 'update' : 'check'}.txt`;
+}
+
+// Only files with exactly the run log name are ever removed; the newest ones stay.
+export function runLogsToRemove(names: string[], keep = RUN_LOG_KEEP): string[] {
+  return names.filter((name) => RUN_LOG_NAME.test(name)).sort().reverse().slice(keep);
+}
+
+const GROUPS: Array<[string, string[]]> = [
+  ['Failed', ['failed', 'rolled-back']],
+  ['Applied', ['applied']],
+  ['Waiting for you', ['waiting']],
+  ['Planned', ['planned']],
+];
+
+// One run on one page: the status of each update, grouped so failures are seen first.
+export function formatRun(report: LogReport & { status?: string }, version: string, system: string): string {
+  const out: string[] = [];
+  const kind = report.mode === 'apply' ? 'Update run' : 'Check';
+  out.push(`Patchday ${kind}`);
+  out.push(`Version ${version} · ${system}`);
+  out.push(`Started ${stamp(report.startedAt)} · finished ${stamp(report.finishedAt)}${report.status ? ` · status ${report.status}` : ''}`);
+  const count = (outcomes: string[]) => report.items.filter((item) => outcomes.includes(item.outcome)).length;
+  out.push(GROUPS.map(([label, outcomes]) => `${label}: ${count(outcomes)}`).join(' · '));
+  for (const [label, outcomes] of GROUPS) {
+    const items = report.items.filter((item) => outcomes.includes(item.outcome));
+    if (items.length === 0) continue;
+    out.push('', `== ${label} ==`);
+    for (const item of items) {
+      const tag = outcomes.length > 1 ? `${OUTCOME[item.outcome] ?? item.outcome}: ` : '';
+      out.push(`  ${tag}${item.name} (${SOURCE[item.source] ?? item.source}) ${item.from} → ${item.to}${item.reason ? ` · ${item.reason}` : ''}`);
+      if (item.detail) out.push('    Tool output:', indent(item.detail));
+    }
+  }
+  if (report.notes.length > 0) out.push('', '== Notes ==', ...report.notes.map((note) => `  ${note}`));
+  if (report.items.length === 0 && report.notes.length === 0) out.push('', 'Nothing to update.');
+  return `${out.join('\n')}\n`;
+}
+
 // A plain text file that answers one question per update: what happened, and why.
 // Problems come first in every run and carry the tool's own last lines.
 export function formatLogs(input: LogInput): string {

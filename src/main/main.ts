@@ -10,7 +10,7 @@ import { run } from '../engine/run.ts';
 import { WORKER_FLAG } from '../core/elevation.ts';
 import { backupsToRemove } from '../core/retention.ts';
 import { addHistory, type HistoryEntry } from '../core/history.ts';
-import { formatLogs, LOG_ROTATE_BYTES } from '../core/logs.ts';
+import { formatLogs, formatRun, LOG_ROTATE_BYTES, runLogName, runLogsToRemove } from '../core/logs.ts';
 import { exportList, importList, isSafeId, MANAGERS, packageKey, type Manager, type Package, type PackageAction } from '../core/packages.ts';
 import { selfCheckDue } from '../core/selfupdate.ts';
 import { act, listInstalled, managersFor, search } from '../engine/packages.ts';
@@ -95,6 +95,7 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
     mode,
   );
   await saveFile(data('reports', `${report.startedAt.replace(/[:.]/g, '-')}.json`), JSON.stringify(report, null, 2));
+  await writeRunLog(report).catch((error) => appendLog(`run log not written: ${(error as Error).message}`));
   for (const item of report.items) {
     if (item.outcome === 'failed' || item.outcome === 'rolled-back') appendLog(`${item.outcome}: ${item.name} ${item.from} -> ${item.to}: ${item.reason}`);
   }
@@ -104,6 +105,17 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
   const problems = report.items.filter((item) => item.outcome === 'failed' || item.outcome === 'rolled-back').length;
   await recordHistory([{ at: report.finishedAt, action: 'run', name: mode === 'apply' ? 'Update run' : 'Check', ok: problems === 0, ...(problems ? { detail: `${problems} problems` } : {}) }]);
   return report;
+}
+
+function systemName(): string {
+  return `${process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : process.platform} ${osRelease()} (${process.arch})`;
+}
+
+// Every run leaves a readable text file next to the app's logs, without asking.
+async function writeRunLog(report: Report): Promise<void> {
+  await saveFile(data('logs', 'runs', runLogName(report)), formatRun(report, app.getVersion(), systemName()));
+  const names = await readdir(data('logs', 'runs')).catch(() => []);
+  for (const name of runLogsToRemove(names)) await rm(data('logs', 'runs', name), { force: true });
 }
 
 // The history file is small and rewritten whole, so a crash leaves either the old or the new list.
@@ -270,9 +282,13 @@ function registerIpc(): void {
     const reports = (await Promise.all(names.map((name) => readFile(data('reports', name), 'utf8').then(JSON.parse).catch(() => null)))).filter(Boolean);
     const history = await readFile(data('history.json'), 'utf8').then((text) => addHistory(JSON.parse(text), [])).catch(() => []);
     const log = [await readFile(data('logs', 'patchday.1.log'), 'utf8').catch(() => ''), await readFile(data('logs', 'patchday.log'), 'utf8').catch(() => '')].join('');
-    const system = `${process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : process.platform} ${osRelease()} (${process.arch})`;
-    await writeFile(choice.filePath, formatLogs({ version: app.getVersion(), system, exportedAt: new Date(), reports, history, log }));
+    await writeFile(choice.filePath, formatLogs({ version: app.getVersion(), system: systemName(), exportedAt: new Date(), reports, history, log }));
     return true;
+  });
+  ipcMain.handle('open-run-logs', async () => {
+    await mkdir(data('logs', 'runs'), { recursive: true });
+    const problem = await shell.openPath(data('logs', 'runs'));
+    if (problem) throw new Error(problem);
   });
   ipcMain.handle('history', async () => readFile(data('history.json'), 'utf8').then((text) => addHistory(JSON.parse(text), [])).catch(() => []));
   ipcMain.handle('export', async (event, input: unknown) => {

@@ -17,6 +17,8 @@ export interface ContainerInfo {
   service: string | null;
   composeFile: string | null;
   postgresUser: string | null;
+  // Where the image's code lives, from the OCI label, for release notes.
+  source: string | null;
 }
 
 interface InspectEntry {
@@ -78,6 +80,7 @@ export function parseInspect(entries: InspectEntry[], portainerStacks?: string[]
       // Several files mean overrides; only a single file can be edited safely.
       composeFile: singleFile(entry.Config.Labels?.[CONFIG_FILES_LABEL]),
       postgresUser: entry.Config.Env?.find((line) => line.startsWith('POSTGRES_USER='))?.slice('POSTGRES_USER='.length) ?? null,
+      source: entry.Config.Labels?.['org.opencontainers.image.source'] ?? null,
     };
   });
 }

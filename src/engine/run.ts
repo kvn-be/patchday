@@ -9,11 +9,15 @@ import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
 import { isSkipped, parseScoopStatus, repairPlan, scoopCommand, WINGET_FLAGS, wingetTarget, type Package } from '../core/packages.ts';
 import { installWithRepair as repairLadder, lastLines, runSequence } from './repair.ts';
 import type { PortainerClient, PortainerStack } from './portainer.ts';
+import type { ReleaseNotesLookup } from './releases.ts';
 import type { Exec, ExecResult, ItemSource, Phase, ProgressItem, Report, ReportItem, Settings } from './types.ts';
 
 export interface Deps {
   exec: Exec;
   tags: (repository: string) => Promise<string[]>;
+  releaseNotes?: ReleaseNotesLookup;
+  // SUDO_ASKPASS and its token, when the user saved an admin password for unattended runs.
+  sudoEnv?: Record<string, string>;
   portainer: PortainerClient | null;
   platform: NodeJS.Platform;
   arch: string;
@@ -35,6 +39,7 @@ interface ImagePlan {
   decision: Decision;
 }
 
+const MINOR_WITHOUT_NOTES = 'minor update without release notes';
 const HEALTH_LIMIT_MS = 5 * 60_000;
 const HEALTH_POLL_MS = 10_000;
 export const BREW_ENV = { HOMEBREW_NO_ENV_HINTS: '1', HOMEBREW_NO_AUTO_UPDATE: '1', NONINTERACTIVE: '1' };
@@ -109,16 +114,24 @@ async function planDocker(deps: Deps, settings: Settings, stacks: PortainerStack
     }
     const to = latestTag(tag, tags);
     if (!to) continue;
-    let decision = decide(
-      {
-        image: repository,
-        currentTag: tag,
-        candidateTag: to,
-        healthy: group.every((container) => container.healthy),
-        managed: first.manager === 'compose' || first.manager === 'portainer',
-      },
-      { autoMinor: settings.autoMinor, holds: settings.holds },
-    );
+    const candidate = {
+      image: repository,
+      currentTag: tag,
+      candidateTag: to,
+      healthy: group.every((container) => container.healthy),
+      managed: first.manager === 'compose' || first.manager === 'portainer',
+    };
+    const policy = { autoMinor: settings.autoMinor, holds: settings.holds };
+    let decision = decide(candidate, policy);
+    // A minor update only goes ahead on its own when its release notes are found and mention nothing breaking.
+    if (decision.reason === MINOR_WITHOUT_NOTES && deps.releaseNotes) {
+      try {
+        const releaseNotes = await deps.releaseNotes(repository, first.source, tag, to);
+        if (releaseNotes) decision = decide({ ...candidate, releaseNotes }, policy);
+      } catch (error) {
+        notes.push(`${repository}: release notes: ${(error as Error).message}`);
+      }
+    }
     if (decision.action === 'auto' && first.manager === 'portainer') {
       const stack = stacks?.find((entry) => entry.name === first.stack);
       if (!stack) decision = { action: 'propose', reason: 'Portainer is not connected' };
@@ -309,16 +322,18 @@ async function listBrew(deps: Deps, settings: Settings, apply: boolean): Promise
 }
 
 async function applyBrew(deps: Deps, tracker: Tracker, open: OutdatedPackage[], notes: string[]): Promise<ReportItem[]> {
+  // Casks that install or remove system files ask sudo; with a saved password it answers by itself.
+  const env = { ...BREW_ENV, ...deps.sudoEnv };
   const results = new Map<string, PackageResult>();
   for (const entry of open) {
     const result = await installWithRepair(deps, tracker, 'brew', entry.name, {
-      install: (force) => deps.exec('brew', upgradeArgs(entry, force), { timeoutMs: 60 * 60_000, env: BREW_ENV }),
+      install: (force) => deps.exec('brew', upgradeArgs(entry, force), { timeoutMs: 60 * 60_000, env }),
       diagnose: (failed) => diagnoseBrew(`${failed.stderr}\n${failed.stdout}`),
       refresh: async () => {
         await deps.exec('brew', ['cleanup', entry.name], { env: BREW_ENV });
         await deps.exec('brew', ['update'], { timeoutMs: 10 * 60_000, env: BREW_ENV });
       },
-      reinstall: repairCommands(deps, { manager: 'brew', id: entry.name, kind: entry.kind }, BREW_ENV),
+      reinstall: repairCommands(deps, { manager: 'brew', id: entry.name, kind: entry.kind }, env),
     });
     results.set(entry.name, result);
     if (restartsDocker(entry) && !(await waitForDocker(deps))) notes.push('Docker did not come back within 5 minutes.');

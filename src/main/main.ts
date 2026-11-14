@@ -1,11 +1,12 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, screen, shell } from 'electron';
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { appendFile } from 'node:fs/promises';
 import { release as osRelease } from 'node:os';
 import { createPortainerClient } from '../engine/portainer.ts';
 import { exec } from '../engine/exec.ts';
 import { createTagLookup } from '../engine/registry.ts';
+import { createReleaseNotesLookup } from '../engine/releases.ts';
 import { run } from '../engine/run.ts';
 import { WORKER_FLAG } from '../core/elevation.ts';
 import { backupsToRemove } from '../core/retention.ts';
@@ -16,6 +17,7 @@ import { selfCheckDue } from '../core/selfupdate.ts';
 import { act, listInstalled, managersFor, search } from '../engine/packages.ts';
 import { DEFAULT_SETTINGS, type ProgressItem, type Report, type Settings } from '../engine/types.ts';
 import { runWorker, runWorkerSelfUpdate, setupWorker, startWorkerSelfUpdate, workerReady, writeStatus } from './elevation.ts';
+import { ASKPASS_FLAG, ASKPASS_TOKEN_ENV, askpassScript, checkPassword, newSession, sessionAllows, type Session } from './askpass.ts';
 import { syncSchedule } from './scheduler.ts';
 import { cancelInstallOnQuit, findUpdate, installMac, installWindows, stageMac, stageWindows, swapMac, type StagedMac } from './updater.ts';
 
@@ -23,7 +25,8 @@ const COFFEE_URL = 'https://ko-fi.com/kvnbe';
 const SCHEDULED_FLAG = '--run-scheduled';
 const scheduled = process.argv.includes(SCHEDULED_FLAG);
 const worker = process.argv.includes(WORKER_FLAG);
-const headless = scheduled || worker;
+const askpass = process.argv.includes(ASKPASS_FLAG);
+const headless = scheduled || worker || askpass;
 
 // Development only: a separate data folder, so a dev build runs next to an installed Patchday
 // and screenshots never show data from this machine.
@@ -53,6 +56,37 @@ async function loadToken(): Promise<string | null> {
   }
 }
 
+// The admin password for unattended Homebrew runs, encrypted like the token. Only the askpass
+// helper reads it, and only while a run's session is open.
+async function hasAdminPassword(): Promise<boolean> {
+  return stat(data('admin.password')).then((info) => info.size > 0).catch(() => false);
+}
+
+async function openSudoSession(): Promise<{ env: Record<string, string>; close(): Promise<void> } | null> {
+  if (process.platform === 'win32' || !(await hasAdminPassword())) return null;
+  const script = data('askpass.sh');
+  await saveFile(script, askpassScript(program().slice(0, -1)));
+  await chmod(script, 0o700);
+  const { token, session } = newSession(new Date());
+  await saveFile(data('askpass.session'), JSON.stringify(session));
+  return {
+    env: { SUDO_ASKPASS: script, [ASKPASS_TOKEN_ENV]: token },
+    close: () => rm(data('askpass.session'), { force: true }),
+  };
+}
+
+async function runAskpass(): Promise<void> {
+  app.dock?.hide();
+  try {
+    const session = await readFile(data('askpass.session'), 'utf8').then((text) => JSON.parse(text) as Session).catch(() => null);
+    if (!sessionAllows(session, process.env[ASKPASS_TOKEN_ENV], new Date())) return app.exit(1);
+    const password = safeStorage.decryptString(await readFile(data('admin.password')));
+    process.stdout.write(`${password}\n`, () => app.exit(0));
+  } catch {
+    app.exit(1);
+  }
+}
+
 async function listReports(): Promise<Report[]> {
   const names = await readdir(data('reports')).catch(() => []);
   const newest = names.filter((name) => name.endsWith('.json')).sort().reverse().slice(0, 20);
@@ -76,10 +110,12 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
   const log = (message: string) => { appendLog(message); onLog(message); };
   const settings = await loadSettings();
   const token = await loadToken();
+  const sudo = mode === 'apply' ? await openSudoSession().catch(() => null) : null;
   const report = await run(
     {
       exec,
       tags: createTagLookup(),
+      releaseNotes: createReleaseNotesLookup(),
       portainer: settings.portainerUrl && token ? createPortainerClient(settings.portainerUrl, token) : null,
       platform: process.platform,
       arch: process.arch,
@@ -90,10 +126,11 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
       now: () => new Date(),
       log,
       onProgress,
+      ...(sudo ? { sudoEnv: sudo.env } : {}),
     },
     settings,
     mode,
-  );
+  ).finally(() => sudo?.close());
   await saveFile(data('reports', `${report.startedAt.replace(/[:.]/g, '-')}.json`), JSON.stringify(report, null, 2));
   await writeRunLog(report).catch((error) => appendLog(`run log not written: ${(error as Error).message}`));
   for (const item of report.items) {
@@ -217,6 +254,7 @@ function registerIpc(): void {
     version: app.getVersion(),
     platform: process.platform,
     hasToken: (await loadToken()) !== null,
+    hasAdminPassword: await hasAdminPassword(),
     adminReady: await workerReady(exec),
     packaged: app.isPackaged,
   }));
@@ -240,6 +278,19 @@ function registerIpc(): void {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('This system cannot store the token safely');
     await saveFile(data('portainer.token'), '');
     await writeFile(data('portainer.token'), safeStorage.encryptString(token));
+  });
+  ipcMain.handle('admin-password', async (_event, password: unknown) => {
+    if (process.platform === 'win32') throw new Error('Windows uses the admin task instead');
+    if (typeof password !== 'string' || password.length === 0 || password.length > 1024) throw new Error('invalid password');
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('This system cannot store the password safely');
+    if (!(await checkPassword(password))) return false;
+    await saveFile(data('admin.password'), '');
+    await chmod(data('admin.password'), 0o600);
+    await writeFile(data('admin.password'), safeStorage.encryptString(password));
+    return true;
+  });
+  ipcMain.handle('admin-password-forget', async () => {
+    await rm(data('admin.password'), { force: true });
   });
   ipcMain.handle('coffee', () => shell.openExternal(COFFEE_URL));
   const deps = { exec, platform: process.platform };
@@ -448,6 +499,7 @@ async function runAsWorker(): Promise<void> {
 if (!headless && !app.requestSingleInstanceLock()) app.quit();
 
 app.whenReady().then(() => {
+  if (askpass) return runAskpass();
   if (worker) return runAsWorker();
   if (scheduled) return runScheduled();
   registerIpc();

@@ -1,0 +1,17 @@
+<!-- @dsCard group="Controls" height=130 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Switch</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400..600&family=Instrument+Sans:wght@400..600&display=swap"></head>
+<body>
+<div style="position:relative;min-height:130px;padding:24px;box-sizing:border-box">
+<div style="position:absolute;inset:0;overflow:hidden;pointer-events:none"><i class="pd-blob pd-blob-1" style="left:-80px;top:40px;width:300px;height:260px;filter:blur(60px)"></i><i class="pd-blob pd-blob-2" style="left:240px;top:-80px;width:280px;height:220px;filter:blur(60px)"></i><i class="pd-blob pd-blob-3" style="left:520px;top:60px;width:260px;height:220px;filter:blur(60px)"></i></div>
+<div style="position:relative">
+<div class="pd-glass" style="border-radius:var(--radius-panel);padding:18px 22px;display:grid;gap:14px;max-width:420px">
+  <label style="display:flex;align-items:center;gap:12px;font-weight:500"><button class="pd-switch" type="button" role="switch" aria-checked="true"><span></span></button>Run on this schedule</label>
+  <label style="display:flex;align-items:center;gap:12px;font-weight:500"><button class="pd-switch" type="button" role="switch" aria-checked="false"><span></span></button>Install updates on schedule</label>
+</div>
+</div>
+</div>
+<script>document.querySelectorAll('.pd-switch').forEach(function (s) { s.addEventListener('click', function () { s.setAttribute('aria-checked', String(s.getAttribute('aria-checked') !== 'true')); }); });</script>
+</body>
+</html>

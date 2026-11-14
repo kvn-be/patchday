@@ -2,6 +2,12 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## Unreleased
+
+### Changed
+
+- The design system is Liquid Glass too: one light theme, new tokens, and components for glass, buttons, pills, switches, segmented controls, the sidebar, list rows, progress, the week dial and the parallax ground. The app takes its components from it instead of its own copies.
+
 ## 1.0.0 - 2026-11-13
 
 ### Added

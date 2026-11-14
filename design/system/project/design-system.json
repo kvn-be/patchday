@@ -22,7 +22,7 @@
    "files": {
     "patchday-mark.svg": {
      "name": "patchday-mark.svg",
-     "blob": "306bc9e6cae4cab0405393550f1889d1",
+     "blob": "2849a49f28122873776c81de68f71d0c",
      "size": 428,
      "type": "image/svg+xml"
     }
@@ -33,11 +33,5 @@
  "docs": {
   "readme": "project/README.md",
   "sections": []
- },
- "lastChange": {
-  "by": "Patchday",
-  "at": "2026-11-06T19:01:32Z",
-  "via": "local",
-  "note": "Added the script bundle so previews run live."
  }
 }

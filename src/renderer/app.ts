@@ -4,11 +4,13 @@ import { reason, STRINGS, type Language } from './i18n.ts';
 import { createViews, type PackageApi } from './views.ts';
 
 interface Api extends PackageApi {
-  state(): Promise<{ settings: Settings; reports: Report[]; version: string; platform: string; hasToken: boolean; adminReady: boolean; packaged: boolean }>;
+  state(): Promise<{ settings: Settings; reports: Report[]; version: string; platform: string; hasToken: boolean; hasAdminPassword: boolean; adminReady: boolean; packaged: boolean }>;
   saveSettings(patch: Partial<Settings>): Promise<Settings>;
   check(): Promise<Report>;
   update(): Promise<Report>;
   saveToken(token: string): Promise<void>;
+  saveAdminPassword(password: string): Promise<boolean>;
+  forgetAdminPassword(): Promise<void>;
   coffee(): Promise<void>;
   setupAdmin(): Promise<boolean>;
   checkSelf(): Promise<string | null>;
@@ -48,6 +50,8 @@ const fill = (text: string, values: Record<string, string | number>) => text.rep
 
 let settings: Settings;
 let hasToken = false;
+let hasAdminPassword = false;
+let sudoMessage = '';
 let reports: Report[] = [];
 let busy = false;
 let live: ProgressItem[] | null = null;
@@ -170,12 +174,12 @@ function renderReport(): void {
     box.append(empty);
     return;
   }
-  if (current.items.length === 0) box.append(element('div', 'notes', t().upToDate));
+  // Applied updates need nothing more; they stay in the history and the run logs.
+  if (current.items.every((entry) => entry.outcome === 'applied')) box.append(element('div', 'notes', t().upToDate));
   const groups: [ReportItem['outcome'][], keyof typeof STRINGS.en][] = [
     [['waiting'], 'groupWaiting'],
     [['failed', 'rolled-back'], 'groupProblems'],
     [['planned'], 'groupPlanned'],
-    [['applied'], 'groupApplied'],
   ];
   for (const [outcomes, label] of groups) {
     const members = current.items.filter((entry) => outcomes.includes(entry.outcome));
@@ -330,6 +334,8 @@ function renderText(): void {
   all('[data-lang]').forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.lang === settings.language)));
   $('coffee').setAttribute('aria-label', t().coffee);
   $('token-state').textContent = hasToken ? t().tokenSaved : t().tokenNone;
+  $('sudo-state').textContent = sudoMessage || (hasAdminPassword ? t().sudoSaved : t().sudoNone);
+  $('sudo-forget').hidden = !hasAdminPassword;
   $('admin-state').textContent = adminMessage || (adminReady ? t().adminOn : t().adminOff);
   $('admin-setup').hidden = adminReady;
   $('self-update').hidden = !selfVersion && !selfMessage;
@@ -421,6 +427,8 @@ async function start(): Promise<void> {
   const state = await api.state();
   settings = state.settings;
   hasToken = state.hasToken;
+  hasAdminPassword = state.hasAdminPassword;
+  $('sudo-card').hidden = state.platform === 'win32';
   adminReady = state.adminReady;
   packaged = state.packaged;
   reports = state.reports;
@@ -465,6 +473,29 @@ async function start(): Promise<void> {
     await api.saveToken(field.value);
     field.value = '';
     hasToken = true;
+    renderText();
+  });
+  $('sudo-save').addEventListener('click', async () => {
+    const field = $<HTMLInputElement>('sudo-password');
+    if (!field.value) return;
+    const button = $<HTMLButtonElement>('sudo-save');
+    button.disabled = true;
+    try {
+      const ok = await api.saveAdminPassword(field.value);
+      sudoMessage = ok ? '' : t().sudoWrong;
+      if (ok) hasAdminPassword = true;
+    } catch (error) {
+      sudoMessage = String((error as Error).message ?? error);
+    } finally {
+      field.value = '';
+      button.disabled = false;
+      renderText();
+    }
+  });
+  $('sudo-forget').addEventListener('click', async () => {
+    await api.forgetAdminPassword();
+    hasAdminPassword = false;
+    sudoMessage = '';
     renderText();
   });
   all('[data-appearance]').forEach((node) => {

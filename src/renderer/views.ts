@@ -13,6 +13,7 @@ export interface PackageApi {
   skip(key: string, version: string): Promise<Settings>;
   history(): Promise<HistoryEntry[]>;
   exportLogs(): Promise<boolean>;
+  openRunLogs(): Promise<void>;
   exportPackages(packages: Package[]): Promise<number | null>;
   importPackages(): Promise<{ packages: Package[]; skipped: number } | null>;
 }
@@ -338,7 +339,15 @@ export function createViews(ctx: ViewContext) {
       }
       renderHistory();
     }, false);
-    head.append(titles, exportButton);
+    const runLogsButton = button(t().openRunLogs, 'line', async () => {
+      try {
+        await ctx.api.openRunLogs();
+      } catch (error) {
+        historyStatus = `${t().actionFailed} ${clean(error)}`;
+        renderHistory();
+      }
+    }, false);
+    head.append(titles, runLogsButton, exportButton);
     const line = element('p', 'muted progress', historyStatus);
     line.setAttribute('role', 'status');
     const panel = element('div', 'panel pd-glass');

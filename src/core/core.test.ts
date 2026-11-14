@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { upgradeArgs, upgradeOrder } from './brew.ts';
-import { decide, protectedCategory } from './policy.ts';
+import { decide, OPTIONAL_MINOR, protectedCategory } from './policy.ts';
+import { DEFAULT_SETTINGS, migrateSettings } from '../engine/types.ts';
 import { launchdPlist, nextRun, schtasksArgs, validateSchedule } from './schedule.ts';
 import { classify, latestTag } from './version.ts';
 
@@ -26,7 +27,7 @@ test('latestTag compares numerically and ignores prereleases', () => {
 
 test('policy updates safe patches automatically', () => {
   assert.equal(decide(base).action, 'auto');
-  assert.equal(decide({ ...base, candidateTag: '1.3.0', releaseNotes: 'Fixes' }).action, 'auto');
+  assert.equal(decide({ ...base, candidateTag: '1.3.0', releaseNotes: 'Fixes' }, { autoMinor: true, holds: [] }).action, 'auto');
 });
 
 test('policy never auto-updates risky candidates', () => {
@@ -64,6 +65,34 @@ test('databases, caches and DNS take bug-fix releases by themselves', () => {
   assert.equal(decide(fixes[0]).reason, 'bug-fix update (database)');
   assert.equal(decide({ ...fixes[0], releaseNotes: 'Breaking change: x' }).action, 'propose');
   assert.equal(decide({ ...fixes[1], candidateTag: '7.4.12-rc1-alpine3.21' }).action, 'propose');
+});
+
+test('minor updates are optional unless they fix a security issue', () => {
+  const minor = { ...base, currentTag: '1.2.3', candidateTag: '1.3.0' };
+  assert.deepEqual(decide(minor), { action: 'propose', reason: OPTIONAL_MINOR });
+  assert.deepEqual(decide({ ...minor, releaseNotes: 'Fixes CVE-2026-12345 in the parser' }), { action: 'auto', reason: 'security update' });
+  assert.deepEqual(decide({ ...minor, releaseNotes: 'See GHSA-x4qr-2fvf-3mr5' }).action, 'auto');
+  assert.deepEqual(decide({ ...minor, releaseNotes: 'Security fix for the login form' }).action, 'auto');
+  assert.deepEqual(decide({ ...minor, advisories: ['CVE-2026-1'] }), { action: 'auto', reason: 'security update' });
+  assert.equal(decide({ ...minor, releaseNotes: 'New dashboard, better security settings page' }).reason, OPTIONAL_MINOR);
+  // A breaking change still waits, security fix or not.
+  assert.equal(decide({ ...minor, releaseNotes: 'CVE-2026-12345. Breaking change: config moved' }).action, 'propose');
+  // A major update never goes ahead by itself.
+  assert.equal(decide({ ...minor, candidateTag: '2.0.0', advisories: ['CVE-2026-1'] }).action, 'propose');
+  // Patches carry security and bug fixes and stay automatic.
+  assert.deepEqual(decide(base), { action: 'auto', reason: 'patch update' });
+  // Approved by the user, or all minor updates switched on.
+  assert.deepEqual(decide(minor, { autoMinor: false, holds: [], approved: ['ghcr.io/acme/app:1.3.0'] }), { action: 'auto', reason: 'approved by you' });
+  assert.equal(decide(minor, { autoMinor: false, holds: [], approved: ['ghcr.io/acme/app:1.4.0'] }).reason, OPTIONAL_MINOR);
+  assert.equal(decide(minor, { autoMinor: true, holds: [] }).reason, 'minor update without release notes');
+  assert.equal(decide({ ...minor, releaseNotes: 'New widgets' }, { autoMinor: true, holds: [] }).action, 'auto');
+});
+
+test('old settings files lose the automatic minor updates once', () => {
+  const old = { ...DEFAULT_SETTINGS, autoMinor: true, policyVersion: undefined };
+  assert.equal(migrateSettings(old).autoMinor, false);
+  assert.equal(migrateSettings(old).policyVersion, 2);
+  assert.equal(migrateSettings({ ...DEFAULT_SETTINGS, autoMinor: true }).autoMinor, true);
 });
 
 test('policy honours holds and does not over-match protected names', () => {

@@ -6,7 +6,7 @@ import { release as osRelease } from 'node:os';
 import { createPortainerClient } from '../engine/portainer.ts';
 import { exec } from '../engine/exec.ts';
 import { createTagLookup } from '../engine/registry.ts';
-import { createReleaseNotesLookup } from '../engine/releases.ts';
+import { createAdvisoryLookup, createReleaseNotesLookup } from '../engine/releases.ts';
 import { lastLines, run } from '../engine/run.ts';
 import { diagnoseWinget, USER_SCOPE } from '../core/failures.ts';
 import { WORKER_FLAG } from '../core/elevation.ts';
@@ -16,7 +16,7 @@ import { formatLogs, formatRun, LOG_ROTATE_BYTES, runLogName, runLogsToRemove } 
 import { exportList, importList, isSafeId, MANAGERS, packageKey, WINGET_FLAGS, wingetTarget, type Manager, type Package, type PackageAction } from '../core/packages.ts';
 import { selfCheckDue } from '../core/selfupdate.ts';
 import { act, listInstalled, managersFor, search } from '../engine/packages.ts';
-import { DEFAULT_SETTINGS, type ProgressItem, type Report, type Settings } from '../engine/types.ts';
+import { DEFAULT_SETTINGS, migrateSettings, type ProgressItem, type Report, type Settings } from '../engine/types.ts';
 import { runWorker, runWorkerSelfUpdate, setupWorker, startWorkerSelfUpdate, workerReady, writeStatus } from './elevation.ts';
 import { ASKPASS_FLAG, ASKPASS_TOKEN_ENV, askpassScript, checkPassword, newSession, sessionAllows, type Session } from './askpass.ts';
 import { syncSchedule } from './scheduler.ts';
@@ -37,7 +37,7 @@ const data = (...parts: string[]) => join(app.getPath('userData'), ...parts);
 
 async function loadSettings(): Promise<Settings> {
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(await readFile(data('settings.json'), 'utf8')) };
+    return migrateSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(await readFile(data('settings.json'), 'utf8')) });
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -123,6 +123,7 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
       exec,
       tags: createTagLookup(),
       releaseNotes: createReleaseNotesLookup(),
+      advisories: createAdvisoryLookup(),
       portainer: settings.portainerUrl && token ? createPortainerClient(settings.portainerUrl, token) : null,
       platform: process.platform,
       arch: process.arch,

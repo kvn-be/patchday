@@ -2,6 +2,14 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## Unreleased
+
+### Changed
+
+- Minor container updates no longer install by themselves, unless they fix a security issue. A security fix is found in the release notes (a CVE or GHSA id, or words like "security fix") or in the GitHub security advisories of the image's repository. Patch updates still install by themselves.
+- Other minor container updates go to the new **Optional updates** section on **Updates**. **Approve** installs one at the next run; approving again takes it back. Optional updates do not count as waiting for you.
+- **Install all minor updates automatically** in **Settings** is off by default. Settings files from older versions are switched off once; turn it on again to get the old behaviour. Homebrew, winget, Chocolatey and Scoop are unchanged.
+
 ## 1.2.2 - 2026-11-14
 
 ### Changed

@@ -1,6 +1,8 @@
 import { app, BrowserWindow, dialog, ipcMain, Notification, safeStorage, screen, shell } from 'electron';
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { appendFile } from 'node:fs/promises';
+import { release as osRelease } from 'node:os';
 import { createPortainerClient } from '../engine/portainer.ts';
 import { exec } from '../engine/exec.ts';
 import { createTagLookup } from '../engine/registry.ts';
@@ -8,6 +10,7 @@ import { run } from '../engine/run.ts';
 import { WORKER_FLAG } from '../core/elevation.ts';
 import { backupsToRemove } from '../core/retention.ts';
 import { addHistory, type HistoryEntry } from '../core/history.ts';
+import { formatLogs, LOG_ROTATE_BYTES } from '../core/logs.ts';
 import { exportList, importList, isSafeId, MANAGERS, packageKey, type Manager, type Package, type PackageAction } from '../core/packages.ts';
 import { selfCheckDue } from '../core/selfupdate.ts';
 import { act, listInstalled, managersFor, search } from '../engine/packages.ts';
@@ -21,6 +24,10 @@ const SCHEDULED_FLAG = '--run-scheduled';
 const scheduled = process.argv.includes(SCHEDULED_FLAG);
 const worker = process.argv.includes(WORKER_FLAG);
 const headless = scheduled || worker;
+
+// Development only: a separate data folder, so a dev build runs next to an installed Patchday
+// and screenshots never show data from this machine.
+if (!app.isPackaged && process.env.PATCHDAY_USER_DATA) app.setPath('userData', process.env.PATCHDAY_USER_DATA);
 
 const data = (...parts: string[]) => join(app.getPath('userData'), ...parts);
 
@@ -52,7 +59,21 @@ async function listReports(): Promise<Report[]> {
   return Promise.all(newest.map(async (name) => JSON.parse(await readFile(data('reports', name), 'utf8'))));
 }
 
+// The log book behind the export: one line per event, kept to about 1 MB plus one older file.
+let logQueue: Promise<unknown> = Promise.resolve();
+function appendLog(message: string): void {
+  const line = `${new Date().toISOString()} ${message.replace(/\s+/g, ' ').trim()}\n`;
+  logQueue = logQueue.then(async () => {
+    await mkdir(data('logs'), { recursive: true });
+    const size = await stat(data('logs', 'patchday.log')).then((info) => info.size).catch(() => 0);
+    if (size > LOG_ROTATE_BYTES) await rename(data('logs', 'patchday.log'), data('logs', 'patchday.1.log')).catch(() => {});
+    await appendFile(data('logs', 'patchday.log'), line);
+  }).catch(() => {});
+}
+
 async function execute(mode: Report['mode'], onLog: (message: string) => void, onProgress: (items: ProgressItem[]) => void = () => {}): Promise<Report> {
+  appendLog(`${mode === 'apply' ? 'update run' : 'check'} started`);
+  const log = (message: string) => { appendLog(message); onLog(message); };
   const settings = await loadSettings();
   const token = await loadToken();
   const report = await run(
@@ -67,14 +88,19 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
       writeFile: saveFile,
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       now: () => new Date(),
-      log: onLog,
+      log,
       onProgress,
     },
     settings,
     mode,
   );
   await saveFile(data('reports', `${report.startedAt.replace(/[:.]/g, '-')}.json`), JSON.stringify(report, null, 2));
-  await pruneBackups(onLog);
+  for (const item of report.items) {
+    if (item.outcome === 'failed' || item.outcome === 'rolled-back') appendLog(`${item.outcome}: ${item.name} ${item.from} -> ${item.to}: ${item.reason}`);
+  }
+  for (const note of report.notes) appendLog(`note: ${note}`);
+  appendLog(`${mode === 'apply' ? 'update run' : 'check'} finished: ${report.items.length} items, status ${report.status}`);
+  await pruneBackups(log);
   const problems = report.items.filter((item) => item.outcome === 'failed' || item.outcome === 'rolled-back').length;
   await recordHistory([{ at: report.finishedAt, action: 'run', name: mode === 'apply' ? 'Update run' : 'Check', ok: problems === 0, ...(problems ? { detail: `${problems} problems` } : {}) }]);
   return report;
@@ -218,6 +244,7 @@ function registerIpc(): void {
     busy = true;
     try {
       const results = await act(deps, action as PackageAction, packages, (result, index) => event.sender.send('package-progress', { ...result, index, total: packages.length }));
+      packages.forEach((entry, index) => appendLog(`${action} ${entry.manager} ${entry.id}: ${results[index].ok ? 'done' : `failed: ${results[index].reason}`}`));
       await recordHistory(packages.map((entry, index) => ({
         at: new Date().toISOString(), action: action as PackageAction, manager: entry.manager, id: entry.id, name: entry.name,
         ok: results[index].ok, ...(results[index].ok ? {} : { detail: [results[index].reason, results[index].detail].filter(Boolean).join('\n') }),
@@ -233,6 +260,19 @@ function registerIpc(): void {
     settings.skipped = { ...settings.skipped, [key]: version };
     await saveFile(data('settings.json'), JSON.stringify(settings, null, 2));
     return settings;
+  });
+  ipcMain.handle('export-logs', async (event) => {
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    const options = { defaultPath: `patchday-logs-${new Date().toISOString().slice(0, 10)}.txt`, filters: [{ name: 'Text', extensions: ['txt'] }] };
+    const choice = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options);
+    if (choice.canceled || !choice.filePath) return false;
+    const names = (await readdir(data('reports')).catch(() => [])).filter((name) => name.endsWith('.json')).sort().reverse().slice(0, 200);
+    const reports = (await Promise.all(names.map((name) => readFile(data('reports', name), 'utf8').then(JSON.parse).catch(() => null)))).filter(Boolean);
+    const history = await readFile(data('history.json'), 'utf8').then((text) => addHistory(JSON.parse(text), [])).catch(() => []);
+    const log = [await readFile(data('logs', 'patchday.1.log'), 'utf8').catch(() => ''), await readFile(data('logs', 'patchday.log'), 'utf8').catch(() => '')].join('');
+    const system = `${process.platform === 'darwin' ? 'macOS' : process.platform === 'win32' ? 'Windows' : process.platform} ${osRelease()} (${process.arch})`;
+    await writeFile(choice.filePath, formatLogs({ version: app.getVersion(), system, exportedAt: new Date(), reports, history, log }));
+    return true;
   });
   ipcMain.handle('history', async () => readFile(data('history.json'), 'utf8').then((text) => addHistory(JSON.parse(text), [])).catch(() => []));
   ipcMain.handle('export', async (event, input: unknown) => {

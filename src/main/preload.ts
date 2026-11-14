@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('patchday', {
   onPackageProgress: (listener: (result: unknown) => void) => ipcRenderer.on('package-progress', (_event, result) => listener(result)),
   skip: (key: string, version: string) => ipcRenderer.invoke('skip', key, version),
   history: () => ipcRenderer.invoke('history'),
+  exportLogs: () => ipcRenderer.invoke('export-logs'),
   exportPackages: (packages: unknown[]) => ipcRenderer.invoke('export', packages),
   importPackages: () => ipcRenderer.invoke('import'),
   onSelfReady: (listener: (version: string) => void) => ipcRenderer.on('self-ready', (_event, version) => listener(version)),

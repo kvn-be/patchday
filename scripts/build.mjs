@@ -12,11 +12,13 @@ const shared = [
   ...['spacing', 'radius', 'fluid'].flatMap((family) => tokens[family].tokens.map((token) => `--${token.name}: ${token.value};`)),
   ...Object.entries(tokens.type.families).map(([key, stack]) => `--font-${key}: ${stack};`),
 ];
-// One theme: Liquid Glass. A token without a value for it falls back to its first value.
-const theme = tokens.color.themes[0].id;
+// Two themes: light first, dark second. data-theme on the root picks one; "system" follows the system.
+const [light, dark] = tokens.color.themes.map((theme) => theme.id);
 const css = [
   '/* Generated from design/system/project/tokens.json */',
-  block(':root', ['color-scheme: light;', ...themed(theme), ...shared]),
+  block(':root', ['color-scheme: light;', ...themed(light), ...shared]),
+  dark ? block(':root[data-theme="dark"]', ['color-scheme: dark;', ...themed(dark)]) : '',
+  dark ? `@media (prefers-color-scheme: dark) {\n${block(':root[data-theme="system"]', ['color-scheme: dark;', ...themed(dark)])}}\n` : '',
 ].join('\n');
 await writeFile('src/renderer/tokens.css', css);
 

@@ -44,7 +44,9 @@ export interface Settings {
   autoMinor: boolean;
   holds: string[];
   language: 'en' | 'de';
+  // Kept for old settings files; the app reads appearance.
   theme: 'dark' | 'light';
+  appearance: 'system' | 'light' | 'dark';
   portainerUrl: string;
   adminAsked: boolean;
   // Versions the user chose to skip, by manager:id.
@@ -62,6 +64,7 @@ export const DEFAULT_SETTINGS: Settings = {
   holds: [],
   language: 'en',
   theme: 'dark',
+  appearance: 'system',
   portainerUrl: '',
   adminAsked: false,
   skipped: {},

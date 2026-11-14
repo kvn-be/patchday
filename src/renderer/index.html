@@ -29,17 +29,13 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 7v10l8 4 8-4V7z"/><path d="M4 7l8 4 8-4M12 11v10"/></svg>
       <span data-i18n="navPackages"></span>
     </button>
-    <button class="pd-nav" type="button" data-page="schedule">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l-3.5 2.5"/></svg>
-      <span data-i18n="navSchedule"></span>
-    </button>
     <button class="pd-nav" type="button" data-page="history">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.6"/><path d="M4 4v4.6h4.6M12 8v4l3 2"/></svg>
       <span data-i18n="navHistory"></span>
     </button>
 
     <div class="sidebar-foot">
-      <button class="pd-nav" type="button" id="settings-open">
+      <button class="pd-nav" type="button" data-page="settings">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4.9a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.5a7 7 0 0 0-2 1.2l-2.4-.9-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-.9a7 7 0 0 0 2 1.2L10 21h4l.5-2.5a7 7 0 0 0 2-1.2l2.4.9 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg>
         <span data-i18n="settings"></span>
       </button>
@@ -83,6 +79,7 @@
           <span class="sr-only" id="when-title" data-i18n="whenTitle"></span>
           <div class="when-col"><span class="when-head" data-i18n="wheelDay"></span><div id="wheel-day"></div></div>
           <div class="when-col"><span class="when-head" data-i18n="wheelTime"></span><div id="wheel-hour"></div></div>
+          <p class="when-note" id="when-note" aria-live="polite"></p>
         </div>
       </section>
       <div class="cards">
@@ -90,7 +87,7 @@
           <h3 data-i18n="nextRunTitle"></h3>
           <p class="big" id="card-next"></p>
           <label class="switch-row"><button class="pd-switch" type="button" role="switch" id="enabled-quick" aria-checked="false"><span></span></button><span data-i18n="enabled"></span></label>
-          <button class="pd-link" type="button" data-goto="schedule" data-i18n="changeTime"></button>
+          <button class="pd-link" type="button" data-goto="settings" data-i18n="moreSettings"></button>
         </section>
         <section class="card pd-glass">
           <h3 data-i18n="lastRun"></h3>
@@ -119,17 +116,11 @@
 
     <section class="page" id="page-packages" aria-labelledby="packages-title" hidden></section>
 
-    <section class="page" id="page-schedule" aria-labelledby="schedule-title" hidden>
+    <section class="page" id="page-settings" aria-labelledby="settings-title" hidden>
       <header class="pd-page-head">
-        <div><h1 id="schedule-title" data-i18n="navSchedule"></h1><p data-i18n="scheduleLead"></p></div>
-        <button class="pd-btn pd-btn-main" type="button" data-action="update" data-i18n="runNow"></button>
+        <div><h1 id="settings-title" data-i18n="settings"></h1><p data-i18n="settingsLead"></p></div>
       </header>
-      <div class="schedule-grid">
-        <section class="pd-glass dial-card">
-          <div id="dial-slot"></div>
-          <p class="note" id="hint" aria-live="polite"></p>
-          <p class="muted" id="next"></p>
-        </section>
+      <div class="settings-grid">
         <section class="pd-glass settings-card">
           <h2 data-i18n="whatHappens"></h2>
           <div class="set"><span data-i18n="enabled"></span><button class="pd-switch" type="button" role="switch" id="enabled" aria-checked="false"><span></span></button><small data-i18n="enabledHint"></small></div>
@@ -142,6 +133,29 @@
             <form class="chip-add" id="hold-form"><label class="sr-only" for="hold-input" data-i18n="neverUpdateAdd"></label><input id="hold-input" type="text" autocomplete="off" spellcheck="false"><button class="pd-btn pd-btn-line pd-btn-small" type="submit" data-i18n="add"></button></form>
           </div>
         </section>
+        <div class="settings-side">
+          <section class="pd-glass settings-card">
+            <h2 data-i18n="appearance"></h2>
+            <div class="set set-wide">
+              <div class="pd-segmented" role="group" data-i18n-aria="appearance" id="appearance">
+                <button type="button" data-appearance="system" data-i18n="appearanceSystem"></button>
+                <button type="button" data-appearance="light" data-i18n="appearanceLight"></button>
+                <button type="button" data-appearance="dark" data-i18n="appearanceDark"></button>
+              </div>
+              <small data-i18n="appearanceHint"></small>
+            </div>
+          </section>
+          <section class="pd-glass settings-card">
+            <h2>Portainer</h2>
+            <div class="set set-wide settings-body">
+              <label class="pd-field"><span data-i18n="portainerUrl"></span><input id="portainer-url" type="url" placeholder="https://127.0.0.1:9443" autocomplete="off" spellcheck="false"></label>
+              <label class="pd-field"><span data-i18n="portainerToken"></span><input id="portainer-token" type="password" autocomplete="off"></label>
+              <small id="token-state"></small>
+              <div><button class="pd-btn pd-btn-line pd-btn-small" id="save-token" type="button" data-i18n="saveToken"></button></div>
+            </div>
+            <div class="set set-wide admin-row" id="admin-row" hidden><small id="admin-state"></small><div><button class="pd-btn pd-btn-line pd-btn-small" id="admin-setup" type="button" data-i18n="adminAllow"></button></div></div>
+          </section>
+        </div>
       </div>
     </section>
 
@@ -149,17 +163,6 @@
   </main>
 </div>
 
-<dialog id="settings">
-  <h2 data-i18n="settings"></h2>
-  <div class="settings-body">
-    <div class="admin-row" id="admin-row" hidden><p class="muted" id="admin-state"></p><button class="pd-btn pd-btn-line pd-btn-small" id="admin-setup" type="button" data-i18n="adminAllow"></button></div>
-    <label class="pd-field"><span data-i18n="portainerUrl"></span><input id="portainer-url" type="url" placeholder="https://127.0.0.1:9443" autocomplete="off" spellcheck="false"></label>
-    <label class="pd-field"><span data-i18n="portainerToken"></span><input id="portainer-token" type="password" autocomplete="off"></label>
-    <p class="muted" id="token-state"></p>
-    <div><button class="pd-btn pd-btn-line pd-btn-small" id="save-token" type="button" data-i18n="saveToken"></button></div>
-  </div>
-  <div class="row"><button class="pd-btn pd-btn-main" id="settings-close" type="button" data-i18n="done"></button></div>
-</dialog>
 
 <dialog id="confirm">
   <h2 data-i18n="confirmTitle"></h2>

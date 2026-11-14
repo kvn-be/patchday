@@ -173,3 +173,24 @@ test('the automatic self-update check runs once a day', () => {
   assert.equal(selfCheckDue('2026-11-14T00:00:00Z', now), true);
   assert.equal(selfCheckDue('garbage', now), true);
 });
+
+test('exported logs put failed updates first, with the tool output', async () => {
+  const { formatLogs } = await import('./logs.ts');
+  const text = formatLogs({
+    version: '1.0.1', system: 'macOS 15 (arm64)', exportedAt: new Date('2026-11-14T10:00:00Z'),
+    reports: [{ startedAt: '2026-11-08T02:00:00.000Z', finishedAt: '2026-11-08T02:09:00.000Z', mode: 'apply', notes: ['Docker did not come back within 5 minutes.'], items: [
+      { source: 'brew', name: 'node', from: '22.11.0', to: '22.12.0', outcome: 'applied', reason: 'Homebrew update' },
+      { source: 'brew', name: 'orbstack', from: '2.0.4', to: '2.0.5', outcome: 'failed', reason: 'download did not match its checksum', detail: 'Error: SHA256 mismatch\nExpected: a\nActual: b' },
+    ] }],
+    history: [{ at: '2026-11-12T17:03:00.000Z', action: 'install', manager: 'brew', name: 'jq', ok: false, detail: 'needs your admin password' }],
+    log: '2026-11-08 02:00 run started',
+  });
+  assert.match(text, /1 runs, 1 failed updates\./);
+  assert.match(text, /2026-11-08 02:00:00 UTC · Update run · 1 applied, 1 failed/);
+  const failed = text.indexOf('FAILED: orbstack'); const applied = text.indexOf('applied: node');
+  assert.ok(failed > 0 && failed < applied, 'failures come first');
+  assert.match(text, /Tool output:\n      Error: SHA256 mismatch\n      Expected: a/);
+  assert.match(text, /Note: Docker did not come back/);
+  assert.match(text, /install · jq \(Homebrew\) · FAILED\n    needs your admin password/);
+  assert.match(text, /== Log ==\n2026-11-08 02:00 run started/);
+});

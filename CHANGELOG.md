@@ -2,6 +2,18 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## 1.2.0 - 2026-11-14
+
+### Added
+
+- Every check and update run writes a run log to `logs/runs/`: each update grouped as failed, applied, waiting or planned, with the reason and the tool's output for failures. The newest 100 are kept. **Open run logs** on **History** opens the folder.
+- Minor container updates read their release notes from GitHub, found through the image's source label or its `ghcr.io` name. When no release between the running and the new version mentions breaking changes, the update runs by itself. Images without a known repository still wait for you.
+- **Admin password** in **Settings** (macOS, Linux): Patchday checks it with `sudo` and keeps it encrypted in the keychain. During an update run, Homebrew apps that install system files use it instead of failing with "needs your admin password". Outside a run Patchday never hands it out. **Forget** removes it.
+
+### Changed
+
+- **Updates** lists only what still needs something. Applied updates stay in **History** and the run logs.
+
 ## 1.1.2 - 2026-11-14
 
 ### Fixed

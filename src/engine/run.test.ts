@@ -352,3 +352,24 @@ test('winget: no update path is repaired with a forced install', async () => {
   });
   assert.equal((await run(deps, DEFAULT_SETTINGS, 'apply')).items[0].outcome, 'applied');
 });
+
+test('winget: a beta is never offered for a stable install', async () => {
+  const list = ['Name      Id                  Version Available     Source', '-'.repeat(60), 'TeamSpeak TeamSpeakSystems.TS 5.0.0   6.0.0-beta4.1 winget'].join('\n');
+  const { deps, commands } = packageHarness('win32', (_command, args) => (args[0] === 'upgrade' && args[1] !== '--id' ? { code: 0, stdout: list } : null));
+  const report = await run(deps, DEFAULT_SETTINGS, 'apply');
+  assert.deepEqual(report.items.map((item) => [item.name, item.outcome, item.reason, item.id]), [['TeamSpeak', 'waiting', 'prerelease', 'TeamSpeakSystems.TS']]);
+  assert.ok(!commands.some((entry) => entry.includes('TeamSpeakSystems.TS') && entry[1] !== 'list'));
+});
+
+test('winget: a per-user install in an admin run is reported for the retry and keeps its id', async () => {
+  const userScope = 'Successfully extracted archive\nThe package installed for user scope cannot be uninstalled when running with administrator privileges.';
+  const { deps } = packageHarness('win32', (_command, args) => {
+    if (args[1] === '--id') return { code: 0x8a15007d - 2 ** 32, stdout: userScope };
+    if (args[0] === 'upgrade') return { code: 0, stdout: WINGET_LIST.split('\n').slice(0, 3).join('\n') };
+    return null;
+  });
+  const [fox] = (await run(deps, DEFAULT_SETTINGS, 'apply')).items;
+  assert.equal(fox.outcome, 'failed');
+  assert.equal(fox.reason, 'installed for your user only');
+  assert.equal(fox.id, 'Fox.F');
+});

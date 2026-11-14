@@ -49,7 +49,19 @@ const WINGET: Record<number, Diagnosis> = {
   0x8a150111: { reason: 'app is in use, close it', fix: 'wait-retry' },
 };
 
+// winget refuses to touch a per-user install from an elevated process. Patchday retries it
+// from the user's own session after the admin run.
+export const USER_SCOPE = 'installed for your user only';
+const USER_SCOPE_TEXT = /installed for user scope cannot be (uninstalled|upgraded)|user scope.*administrator privileges/i;
+
+// Visual Studio updates through its own installer, which stops when it needs its own update,
+// a restart or a closed Visual Studio. A fresh install cannot help.
+const VISUAL_STUDIO = 'Visual Studio Installer needs you: open it once and update there';
+const VISUAL_STUDIO_TEXT = /Visual ?Studio.*(lower than the desired version|update failed)|VisualStudio\.\d{4}\.[A-Za-z]+\].*Installer failed/is;
+
 export function diagnoseWinget(code: number, output: string): Diagnosis {
+  if (USER_SCOPE_TEXT.test(output)) return { reason: USER_SCOPE, final: true };
+  if (VISUAL_STUDIO_TEXT.test(output)) return { reason: VISUAL_STUDIO, final: true };
   const known = WINGET[code >>> 0];
   if (known) return known;
   // Windows error codes 2 and 3, also as HRESULT; 206 is a path that is too long.
@@ -74,6 +86,7 @@ const CHOCO: Array<[RegExp, Diagnosis]> = [
 ];
 
 export function diagnoseChoco(code: number, output: string): Diagnosis {
+  if (VISUAL_STUDIO_TEXT.test(output)) return { reason: VISUAL_STUDIO, final: true };
   if (code === 3010 || code === 1641 || code === 350) return { reason: 'restart to finish', applied: true };
   return CHOCO.find(([pattern]) => pattern.test(output))?.[1] ?? { reason: `${UNKNOWN} (${code})` };
 }

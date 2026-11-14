@@ -7,12 +7,13 @@ import { createPortainerClient } from '../engine/portainer.ts';
 import { exec } from '../engine/exec.ts';
 import { createTagLookup } from '../engine/registry.ts';
 import { createReleaseNotesLookup } from '../engine/releases.ts';
-import { run } from '../engine/run.ts';
+import { lastLines, run } from '../engine/run.ts';
+import { diagnoseWinget, USER_SCOPE } from '../core/failures.ts';
 import { WORKER_FLAG } from '../core/elevation.ts';
 import { backupsToRemove } from '../core/retention.ts';
 import { addHistory, type HistoryEntry } from '../core/history.ts';
 import { formatLogs, formatRun, LOG_ROTATE_BYTES, runLogName, runLogsToRemove } from '../core/logs.ts';
-import { exportList, importList, isSafeId, MANAGERS, packageKey, type Manager, type Package, type PackageAction } from '../core/packages.ts';
+import { exportList, importList, isSafeId, MANAGERS, packageKey, WINGET_FLAGS, wingetTarget, type Manager, type Package, type PackageAction } from '../core/packages.ts';
 import { selfCheckDue } from '../core/selfupdate.ts';
 import { act, listInstalled, managersFor, search } from '../engine/packages.ts';
 import { DEFAULT_SETTINGS, type ProgressItem, type Report, type Settings } from '../engine/types.ts';
@@ -161,6 +162,30 @@ async function writeRunLog(report: Report): Promise<void> {
   for (const name of runLogsToRemove(names)) await rm(data('logs', 'runs', name), { force: true });
 }
 
+// winget will not update a per-user install from the admin task. Those packages get one more try
+// here, in the user's own session, and the saved report and run log are updated with the result.
+async function retryUserScope(report: Report): Promise<Report> {
+  const stuck = report.items.filter((item) => item.source === 'winget' && item.outcome === 'failed' && item.reason === USER_SCOPE);
+  if (process.platform !== 'win32' || stuck.length === 0) return report;
+  const items = [...report.items];
+  for (const item of stuck) {
+    const id = item.id ?? item.name;
+    if (!isSafeId('winget', id)) continue;
+    const result = await exec('winget', ['upgrade', ...wingetTarget(id), '--silent', '--accept-package-agreements', ...WINGET_FLAGS], { timeoutMs: 30 * 60_000 });
+    const diagnosis = result.code === 0 ? null : diagnoseWinget(result.code, `${result.stdout}\n${result.stderr}`);
+    const done = result.code === 0 || Boolean(diagnosis?.applied);
+    appendLog(`user scope ${id}: ${done ? 'done' : `failed: ${diagnosis?.reason}`}`);
+    items[items.indexOf(item)] = done
+      ? { ...item, outcome: 'applied', reason: diagnosis?.reason ?? 'winget update for your user', detail: undefined }
+      : { ...item, reason: diagnosis?.reason ?? item.reason, detail: lastLines(result) };
+  }
+  const problems = items.some((item) => item.outcome === 'failed' || item.outcome === 'rolled-back');
+  const updated: Report = { ...report, items, status: problems ? 'error' : items.some((item) => item.outcome === 'waiting') ? 'warning' : 'ok' };
+  await saveFile(data('reports', `${report.startedAt.replace(/[:.]/g, '-')}.json`), JSON.stringify(updated, null, 2));
+  await writeRunLog(updated).catch(() => {});
+  return updated;
+}
+
 // The history file is small and rewritten whole, so a crash leaves either the old or the new list.
 let historyQueue: Promise<unknown> = Promise.resolve();
 function recordHistory(entries: HistoryEntry[]): Promise<unknown> {
@@ -248,7 +273,7 @@ function registerIpc(): void {
     try {
       const onItems = (items: ProgressItem[]) => sender.send('progress', items);
       // Windows: real updates go through the task that already holds admin rights.
-      if (mode === 'apply' && (await workerReady(exec))) return await runWorker(exec, data('progress.json'), onItems);
+      if (mode === 'apply' && (await workerReady(exec))) return await retryUserScope(await runWorker(exec, data('progress.json'), onItems));
       return await execute(mode, (message) => sender.send('log', message), onItems);
     } finally {
       busy = false;
@@ -465,7 +490,7 @@ async function runScheduled(): Promise<void> {
   const settings = await loadSettings();
   const elevated = settings.applyUpdates && (await workerReady(exec));
   const report = elevated
-    ? await runWorker(exec, data('progress.json'), () => {})
+    ? await retryUserScope(await runWorker(exec, data('progress.json'), () => {}))
     : await execute(settings.applyUpdates ? 'apply' : 'preview', () => {});
   const changed = report.items.filter((item) => item.outcome === 'applied').length;
   const open = report.items.filter((item) => item.outcome !== 'applied').length;

@@ -4,7 +4,7 @@ import { parseInspect, type ContainerInfo } from '../core/docker.ts';
 import { parseChocoOutdated, type ChocoPackage } from '../core/choco.ts';
 import { diagnoseBrew, diagnoseChoco, diagnoseScoop, diagnoseWinget, type Diagnosis } from '../core/failures.ts';
 import { decide, type Decision } from '../core/policy.ts';
-import { latestTag } from '../core/version.ts';
+import { isPrerelease, latestTag } from '../core/version.ts';
 import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
 import { isSkipped, parseScoopStatus, repairPlan, scoopCommand, WINGET_FLAGS, wingetTarget, type Package } from '../core/packages.ts';
 import { installWithRepair as repairLadder, lastLines, runSequence } from './repair.ts';
@@ -265,8 +265,12 @@ async function outdatedBrew(deps: Deps): Promise<OutdatedPackage[]> {
   return parseOutdated(result.stdout);
 }
 
-function packageItem(source: ItemSource, name: string, from: string, to: string, outcome: ReportItem['outcome'], reason: string, detail?: string): ReportItem {
-  return { source, name, from, to, outcome, reason, ...(detail ? { detail } : {}) };
+function betaFor(installed: string, available: string): boolean {
+  return isPrerelease(available) && !isPrerelease(installed);
+}
+
+function packageItem(source: ItemSource, name: string, from: string, to: string, outcome: ReportItem['outcome'], reason: string, detail?: string, id?: string): ReportItem {
+  return { source, name, from, to, outcome, reason, ...(detail ? { detail } : {}), ...(id && id !== name ? { id } : {}) };
 }
 
 export { lastLines };
@@ -394,7 +398,7 @@ async function applyWinget(deps: Deps, tracker: Tracker, open: WingetPackage[], 
     const ok = result.ok && (!left.has(entry.id) || Boolean(result.reason));
     const reason = ok ? result.reason || 'winget update' : result.reason || NO_CHANGE;
     tracker.finish('winget', entry.name, ok, reason);
-    return packageItem('winget', entry.name, entry.installed, entry.available, ok ? 'applied' : 'failed', reason, ok ? undefined : result.detail);
+    return packageItem('winget', entry.name, entry.installed, entry.available, ok ? 'applied' : 'failed', reason, ok ? undefined : result.detail, entry.id);
   });
 }
 
@@ -506,6 +510,11 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode']):
     if (deps.platform === 'win32') {
       choco = await listChoco(deps, settings);
       winget = await listWinget(deps, settings);
+      // A beta is never offered for a stable install, as with containers.
+      for (const entry of choco?.open.filter((item) => betaFor(item.installed, item.available)) ?? []) items.push(packageItem('choco', entry.name, entry.installed, entry.available, 'waiting', 'prerelease'));
+      for (const entry of winget.filter((item) => betaFor(item.installed, item.available))) items.push(packageItem('winget', entry.name, entry.installed, entry.available, 'waiting', 'prerelease', undefined, entry.id));
+      if (choco) choco = { ...choco, open: choco.open.filter((item) => !betaFor(item.installed, item.available)) };
+      winget = winget.filter((item) => !betaFor(item.installed, item.available));
       scoopApps = await listScoop(deps, settings, apply);
     }
   } catch (error) {

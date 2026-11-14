@@ -104,12 +104,19 @@ function item(name: string, meta: string, version: string, pill: HTMLElement): H
 
 // ---------- Updates ----------
 
+let overall: { box: HTMLElement; text: HTMLElement; bar: HTMLElement } | undefined;
+
 function renderLive(box: HTMLElement, items: ProgressItem[]): void {
   const finished = items.filter((entry) => entry.state === 'done' || entry.state === 'failed').length;
-  const total = element('div', 'overall');
   const share = items.length ? Math.round((finished / items.length) * 100) : 0;
-  total.append(element('span', 'muted', `${t().updating} ${finished} / ${items.length} ${t().overall}`), bar('active', share, t().overall));
-  box.append(total);
+  // The overall bar stays the same element between redraws, so it grows from where it was instead of jumping.
+  overall ??= { box: element('div', 'overall'), text: element('span', 'muted', ''), bar: bar('active', 0, t().overall) };
+  if (!overall.box.childElementCount) overall.box.append(overall.text, overall.bar);
+  overall.text.textContent = `${t().updating} ${finished} / ${items.length} ${t().overall}`;
+  overall.bar.setAttribute('aria-label', t().overall);
+  overall.bar.setAttribute('aria-valuenow', String(share));
+  (overall.bar.firstElementChild as HTMLElement).style.width = `${share}%`;
+  box.append(overall.box);
   for (const entry of items) {
     const label = entry.state === 'done' ? t().bApplied : entry.state === 'failed' ? t().bFailed : entry.phase ? t()[PHASES[entry.phase]] : t().queued;
     const pill = element('span', `pd-pill pd-pill-${entry.state === 'done' ? 'ok' : entry.state === 'failed' ? 'back' : 'plain'}`, label);
@@ -359,6 +366,10 @@ function setBusy(label: string): void {
 
 async function perform(action: () => Promise<Report>, label: string): Promise<void> {
   if (busy) return;
+  // A new run starts with fresh bars and steps.
+  overall = undefined;
+  stepViews.clear();
+  reached.clear();
   setBusy(label);
   try {
     reports = [await action(), ...reports];

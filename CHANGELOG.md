@@ -2,6 +2,12 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## 1.2.2 - 2026-11-14
+
+### Changed
+
+- Databases, caches and DNS services take bug-fix releases by themselves, for example PostgreSQL 18.6 to 18.7 or Redis 7.4.11 to 7.4.12, with the usual backup, database dump, health check and rollback. Major and feature updates, Portainer and Immich still wait for you.
+
 ## 1.2.1 - 2026-11-14
 
 ### Fixed

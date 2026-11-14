@@ -1,6 +1,6 @@
 {
   "name": "patchday",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Scheduled, rule-based updates for Homebrew, winget, Chocolatey, Scoop and Docker with backup and rollback, plus package search, install and removal.",
   "license": "MIT",
   "funding": "https://ko-fi.com/kvnbe",

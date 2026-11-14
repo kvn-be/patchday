@@ -142,6 +142,8 @@ const REASONS_DE: Record<string, string> = {
   'Chocolatey update': 'Chocolatey-Update',
   'pinned in Chocolatey': 'in Chocolatey festgepinnt',
   'already updated by Chocolatey': 'schon durch Chocolatey aktualisiert',
+  'installed for your user only': 'nur für deinen Benutzer installiert',
+  'Visual Studio Installer needs you: open it once and update there': 'Visual Studio Installer braucht dich: einmal öffnen und dort aktualisieren',
   'a folder of the installed app is missing': 'ein Ordner der installierten App fehlt',
   'a file path is too long': 'ein Dateipfad ist zu lang',
   'winget update': 'winget-Update',

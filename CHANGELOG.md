@@ -2,6 +2,15 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## 1.2.1 - 2026-11-14
+
+### Fixed
+
+- macOS: a saved admin password now reaches `sudo` during Homebrew runs. Homebrew starts itself with an empty environment, so the run's token now sits in the helper script, which exists only while the run lasts.
+- Windows: an app installed for one user only is no longer stuck in the admin run. winget refuses it there, so Patchday updates it once more from your own session.
+- Windows: a beta is never offered for a stable install, for example TeamSpeak 6 beta over TeamSpeak 5. It waits for you instead.
+- Windows: Visual Studio Build Tools no longer runs a pointless fresh install. The reason says to open the Visual Studio Installer once and update there.
+
 ## 1.2.0 - 2026-11-14
 
 ### Added

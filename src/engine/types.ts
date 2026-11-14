@@ -10,6 +10,8 @@ export interface ReportItem {
   reason: string;
   // The tool's own last lines, for failures only.
   detail?: string;
+  // The package manager's id, when it differs from the name (winget).
+  id?: string;
 }
 
 export interface Report {

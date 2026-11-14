@@ -77,3 +77,13 @@ test('repair plans clean the cache and install fresh, per package manager', () =
   ]);
   assert.throws(() => repairPlan({ manager: 'brew', id: '--force' }), /not a valid package name/);
 });
+
+test('Visual Studio and per-user installs get a reason a fresh install cannot fix', async () => {
+  const { diagnoseChoco } = await import('../core/failures.ts');
+  const choco = "ERROR: After update operation, Visual Studio product: [installPath = 'C:\\BuildTools'] is at version 16.11.37627.13, which is lower than the desired version (16.11.37903.5). This means the update failed.";
+  assert.deepEqual(diagnoseChoco(-1, choco), { reason: 'Visual Studio Installer needs you: open it once and update there', final: true });
+  const winget = 'Found Visual Studio BuildTools 2019 [Microsoft.VisualStudio.2019.BuildTools] Version 16.11.63\nStarting package install...\nInstaller failed with exit code: 1';
+  assert.equal(diagnoseWinget(0x8a150006, winget).reason, 'Visual Studio Installer needs you: open it once and update there');
+  assert.equal(diagnoseWinget(0x8a15007d, 'The package installed for user scope cannot be uninstalled when running with administrator privileges.').reason, 'installed for your user only');
+  assert.equal(diagnoseWinget(0x8a150006, 'Found Foo [Foo.Bar] Version 1\nInstaller failed with exit code: 1').reason, 'installer stopped with an error (0x8A150006)');
+});

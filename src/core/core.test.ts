@@ -36,16 +36,34 @@ test('policy never auto-updates risky candidates', () => {
     { ...base, healthy: false },
     { ...base, managed: false },
     { ...base, releaseNotes: 'BREAKING CHANGE: config moved' },
-    { ...base, image: 'postgres', currentTag: '16.1', candidateTag: '16.2' },
-    { ...base, image: 'docker.io/library/redis' },
-    { ...base, image: 'valkey/valkey' },
+    { ...base, image: 'postgres', currentTag: '16.15-alpine3.23', candidateTag: '18.7-alpine3.23' },
+    { ...base, image: 'ghcr.io/immich-app/postgres', currentTag: '14', candidateTag: '16' },
+    { ...base, image: 'mariadb', currentTag: '11.4.2', candidateTag: '11.5.0' },
+    { ...base, image: 'docker.io/library/redis', candidateTag: '1.3.0' },
+    { ...base, image: 'valkey/valkey', candidateTag: '2.0.0' },
+    { ...base, image: 'redis', healthy: false },
+    { ...base, image: 'postgres', currentTag: '16.1', candidateTag: '16.2', managed: false },
     { ...base, image: 'local/immich-server' },
     { ...base, image: 'ghcr.io/immich-app/immich-machine-learning' },
-    { ...base, image: 'cloudflare/cloudflared' },
+    { ...base, image: 'cloudflare/cloudflared', currentTag: '2026.10.7', candidateTag: '2026.11.0' },
     { ...base, image: 'portainer/portainer-ce' },
     { ...base, currentTag: '6.0.0-beta13', candidateTag: '6.0.1-beta13' },
   ];
   for (const candidate of risky) assert.equal(decide(candidate).action, 'propose', candidate.image);
+});
+
+test('databases, caches and DNS take bug-fix releases by themselves', () => {
+  const fixes = [
+    { ...base, image: 'postgres', currentTag: '18.6-alpine3.23', candidateTag: '18.7-alpine3.23' },
+    { ...base, image: 'redis', currentTag: '7.4.11-alpine3.21', candidateTag: '7.4.12-alpine3.21' },
+    { ...base, image: 'valkey/valkey', currentTag: '9.1.2-alpine', candidateTag: '9.1.3-alpine' },
+    { ...base, image: 'ghcr.io/bakito/adguardhome-sync', currentTag: 'v0.9.5', candidateTag: 'v0.9.6' },
+    { ...base, image: 'cloudflare/cloudflared' },
+  ];
+  for (const candidate of fixes) assert.deepEqual(decide(candidate).action, 'auto', candidate.image);
+  assert.equal(decide(fixes[0]).reason, 'bug-fix update (database)');
+  assert.equal(decide({ ...fixes[0], releaseNotes: 'Breaking change: x' }).action, 'propose');
+  assert.equal(decide({ ...fixes[1], candidateTag: '7.4.12-rc1-alpine3.21' }).action, 'propose');
 });
 
 test('policy honours holds and does not over-match protected names', () => {

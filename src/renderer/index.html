@@ -75,20 +75,16 @@
             <button class="pd-btn pd-btn-line" type="button" data-goto="updates" data-i18n="reviewUpdates"></button>
           </div>
         </div>
-        <div class="when" role="group" aria-labelledby="when-title">
+        <div class="when" id="when" role="group" aria-labelledby="when-title">
           <span class="sr-only" id="when-title" data-i18n="whenTitle"></span>
+          <label class="when-switch"><button class="pd-switch" type="button" role="switch" id="enabled-quick" aria-checked="false"><span></span></button><span data-i18n="enabled"></span></label>
           <div class="when-col"><span class="when-head" data-i18n="wheelDay"></span><div id="wheel-day"></div></div>
           <div class="when-col"><span class="when-head" data-i18n="wheelTime"></span><div id="wheel-hour"></div></div>
-          <p class="when-note" id="when-note" aria-live="polite"></p>
+          <p class="when-next" aria-live="polite"><span data-i18n="nextRunTitle"></span><strong id="when-next"></strong></p>
+          <p class="when-note" id="when-note" aria-live="polite" hidden></p>
         </div>
       </section>
       <div class="cards">
-        <section class="card pd-glass">
-          <h3 data-i18n="nextRunTitle"></h3>
-          <p class="big" id="card-next"></p>
-          <label class="switch-row"><button class="pd-switch" type="button" role="switch" id="enabled-quick" aria-checked="false"><span></span></button><span data-i18n="enabled"></span></label>
-          <button class="pd-link" type="button" data-goto="settings" data-i18n="moreSettings"></button>
-        </section>
         <section class="card pd-glass">
           <h3 data-i18n="lastRun"></h3>
           <p class="big" id="card-last"></p>

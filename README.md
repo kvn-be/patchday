@@ -154,7 +154,7 @@ A sidebar leads to **Overview**, **Updates**, **Packages** and **History**, with
 
 | Page | What you can do |
 | --- | --- |
-| Overview | See how many updates are ready, pick the day and time of the weekly run, and see the next and the last run and what waits for your decision. |
+| Overview | See how many updates are ready. Turn the schedule on or off, pick its day and time and see the date of the next run, all in one box. Below: the last run and what waits for your decision. |
 | Updates | The latest check or run, grouped into what waits for you, problems, what installs by itself and what was applied. |
 | Packages | One search for both: installed packages first, packages you can add below. Update, skip a version or uninstall right in the row. |
 | Settings | Choose what happens at a run, keep the **Never update** list, pick light, dark or system appearance, and connect Portainer. |
@@ -187,7 +187,7 @@ While Portainer is running and no token is saved, stacks that might belong to it
 | Install minor updates automatically | On | While off, minor updates of containers are suggestions. |
 | Update Patchday automatically | On | Checks once a day, downloads in the background and installs when you close Patchday. |
 
-Day and time are on **Overview**. Everything else is on the **Settings** page, along with the appearance, the Portainer connection and, on Windows, the admin access.
+The schedule switch, day and time are on **Overview**. Everything else is on the **Settings** page, along with the appearance, the Portainer connection and, on Windows, the admin access.
 | Never update | Empty | Names of images or packages to leave alone, separated by commas. |
 | Portainer address and token | Empty | Connects Portainer stacks. |
 

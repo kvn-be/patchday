@@ -43,20 +43,23 @@ button { font: inherit; color: inherit; }
 .hero h2 { font: 400 44px/1.05 var(--font-display); }
 .hero p { max-width: 560px; font-size: 16px; color: var(--ink-2); }
 /* When: two wheels for day and time, the schedule at a glance and in reach. */
-.when { flex: none; display: grid; grid-template-columns: 190px 120px; gap: 12px; padding: 12px 14px 8px; border-radius: 22px; background: var(--glass); border: 1px solid var(--glass-edge); box-shadow: var(--shadow-glass); }
-.when-col { display: grid; gap: 2px; min-width: 0; }
+.when { flex: none; display: grid; grid-template-columns: 190px 120px; gap: 10px 12px; padding: 14px 14px 12px; border-radius: 22px; background: var(--glass); border: 1px solid var(--glass-edge); box-shadow: var(--shadow-glass); }
+.when-switch { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 4px 10px; border-bottom: 1px solid var(--hairline); font-size: 14px; font-weight: 600; }
+.when-col { display: grid; gap: 2px; min-width: 0; transition: opacity .2s; }
 .when-head { padding-left: 4px; font-size: 13px; font-weight: 600; color: var(--ink-3); text-align: center; }
-.when .pd-wheel { height: 180px; }
-.when-note { grid-column: 1 / -1; max-width: 322px; font-size: 13px; line-height: 1.4; font-weight: 500; text-align: center; }
-.when-note.night { color: var(--ok); }
-.when-note.day { color: var(--back); }
-.cards { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.when .pd-wheel { height: 170px; }
+.when.off .when-col { opacity: .45; }
+.when-next { grid-column: 1 / -1; display: grid; gap: 2px; padding: 10px 4px 0; border-top: 1px solid var(--hairline); font-size: 13px; color: var(--ink-3); text-align: center; }
+.when-next strong { font-size: 15px; font-weight: 600; color: var(--ink); }
+.when.off .when-next strong { font-weight: 500; color: var(--ink-2); }
+.when-note { grid-column: 1 / -1; max-width: 322px; font-size: 13px; line-height: 1.4; font-weight: 500; text-align: center; color: var(--back); }
+.when-note[hidden] { display: none; }
+.cards { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .card { display: flex; flex-direction: column; gap: 10px; padding: 20px 24px; border-radius: var(--radius-panel); min-width: 0; }
 .card h3 { font-size: 14px; font-weight: 600; color: var(--ink-2); }
 .card .big { font: 400 25px/1.15 var(--font-display); overflow-wrap: anywhere; }
 .card .pd-link { margin-top: auto; }
 .pills { display: flex; flex-wrap: wrap; gap: 8px; }
-.switch-row { display: flex; align-items: center; gap: 12px; font-weight: 500; }
 
 /* Packages */
 .search { display: flex; align-items: center; gap: 12px; padding: 0 20px; border-radius: 20px; }

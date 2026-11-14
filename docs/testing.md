@@ -35,13 +35,14 @@ Target machines:
 
 ## 4. Schedule
 
-- [ ] On **Overview**, turn the **Day** and **Time** wheels to the next full hour that is at least 10 minutes away, with the mouse wheel, by dragging and with the arrow keys. **Next run** shows that day and time.
-- [ ] Turn on **Run on this schedule**. Leave **Install updates on schedule** off.
+- [ ] On **Overview**, turn the **Day** and **Time** wheels to the next full hour that is at least 10 minutes away, with the mouse wheel, by dragging and with the arrow keys. **Next run** below the wheels shows that date and time.
+- [ ] Turn on **Run on this schedule** above the wheels. Leave **Install updates on schedule** off.
 - [ ] macOS: `launchctl print gui/$(id -u)/io.github.kvn-be.patchday` shows the job with the chosen weekday and hour.
 - [ ] Windows: `schtasks /Query /TN Patchday /V /FO LIST` shows a weekly task on the chosen day and time.
 - [ ] Keep the computer awake and logged in. At the chosen time, a run starts without opening a window and shows a notification.
 - [ ] The new report is a preview: items are **Planned**, nothing was installed.
-- [ ] Turn **Run on this schedule** off. The launchd job or the scheduled task is gone.
+- [ ] Turn **Run on this schedule** off. The wheels fade, **Next run** says the schedule is off, and the launchd job or the scheduled task is gone.
+- [ ] Pick an hour from 06:00 on. A short warning shows below the date; from 00:00 to 05:00 it is gone.
 
 ## 5. Update run with a rollback
 

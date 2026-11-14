@@ -65,13 +65,19 @@ async function hasAdminPassword(): Promise<boolean> {
 async function openSudoSession(): Promise<{ env: Record<string, string>; close(): Promise<void> } | null> {
   if (process.platform === 'win32' || !(await hasAdminPassword())) return null;
   const script = data('askpass.sh');
-  await saveFile(script, askpassScript(program().slice(0, -1)));
-  await chmod(script, 0o700);
   const { token, session } = newSession(new Date());
+  // A development build keeps its own data folder, also inside the helper.
+  const keep: Record<string, string> = !app.isPackaged && process.env.PATCHDAY_USER_DATA ? { PATCHDAY_USER_DATA: process.env.PATCHDAY_USER_DATA } : {};
+  await saveFile(script, '');
+  await chmod(script, 0o700);
+  await writeFile(script, askpassScript(program().slice(0, -1), token, keep));
   await saveFile(data('askpass.session'), JSON.stringify(session));
   return {
-    env: { SUDO_ASKPASS: script, [ASKPASS_TOKEN_ENV]: token },
-    close: () => rm(data('askpass.session'), { force: true }),
+    env: { SUDO_ASKPASS: script },
+    close: async () => {
+      await rm(data('askpass.session'), { force: true });
+      await rm(script, { force: true });
+    },
   };
 }
 
@@ -80,7 +86,7 @@ async function runAskpass(): Promise<void> {
   try {
     const session = await readFile(data('askpass.session'), 'utf8').then((text) => JSON.parse(text) as Session).catch(() => null);
     if (!sessionAllows(session, process.env[ASKPASS_TOKEN_ENV], new Date())) return app.exit(1);
-    const password = safeStorage.decryptString(await readFile(data('admin.password')));
+    const password = await safeStorage.decryptStringAsync(await readFile(data('admin.password'))).then((result) => (typeof result === 'string' ? result : result.result));
     process.stdout.write(`${password}\n`, () => app.exit(0));
   } catch {
     app.exit(1);

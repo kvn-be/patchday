@@ -22,8 +22,9 @@ test('a session left behind by a crash expires', () => {
   assert.equal(sessionAllows({ ...session, expires: 'garbage' }, token, now), false);
 });
 
-test('the helper script starts Patchday and holds no secret', () => {
-  const script = askpassScript(['/Applications/Patchday.app/Contents/MacOS/Patchday']);
-  assert.equal(script, "#!/bin/sh\nexec '/Applications/Patchday.app/Contents/MacOS/Patchday' --askpass\n");
-  assert.match(askpassScript(["/tmp/it's here/electron", '/app']), /'\/tmp\/it'\\''s here\/electron' '\/app' --askpass/);
+test('the helper script starts Patchday with the run token and holds no password', () => {
+  const token = 'a'.repeat(64);
+  const script = askpassScript(['/Applications/Patchday.app/Contents/MacOS/Patchday'], token);
+  assert.equal(script, `#!/bin/sh\nPATCHDAY_ASKPASS_TOKEN='${token}' exec '/Applications/Patchday.app/Contents/MacOS/Patchday' --askpass\n`);
+  assert.match(askpassScript(["/tmp/it's here/electron", '/app'], token, { PATCHDAY_USER_DATA: '/tmp/x' }), /^#!\/bin\/sh\nPATCHDAY_USER_DATA='\/tmp\/x' PATCHDAY_ASKPASS_TOKEN='a+' exec '\/tmp\/it'\\''s here\/electron' '\/app' --askpass\n$/);
 });

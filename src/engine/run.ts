@@ -506,7 +506,7 @@ async function applyScoop(deps: Deps, tracker: Tracker, open: ScoopUpdate[]): Pr
   });
 }
 
-function summarize(items: ReportItem[]): Report['status'] {
+export function summarize(items: ReportItem[]): Report['status'] {
   if (items.some((item) => item.outcome === 'failed' || item.outcome === 'rolled-back')) return 'error';
   return items.some((item) => item.outcome === 'waiting') ? 'warning' : 'ok';
 }
@@ -539,10 +539,17 @@ function packagePreview(
   ];
 }
 
-// only: "repository:tag" of the containers to update right now ("Update now"); packages are then left alone.
-export async function run(deps: Deps, settings: Settings, mode: Report['mode'], only?: string[]): Promise<Report> {
+export interface RunOptions {
+  // "Update now": only these containers ("repository:tag") run; packages and other containers are left alone.
+  only?: string[];
+  // "Update all, including waiting": these waiting containers run as well, next to everything automatic.
+  force?: string[];
+}
+
+export async function run(deps: Deps, settings: Settings, mode: Report['mode'], options: RunOptions = {}): Promise<Report> {
   const startedAt = deps.now().toISOString();
-  const selected = mode === 'apply' && only?.length ? new Set(only) : null;
+  const selected = mode === 'apply' && options.only?.length ? new Set(options.only) : null;
+  const overrule = mode === 'apply' ? new Set([...(options.only ?? []), ...(options.force ?? [])]) : new Set<string>();
   const notes: string[] = [];
   const items: ReportItem[] = [];
   const apply = mode === 'apply';
@@ -559,7 +566,7 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode'], 
 
   let auto: ImagePlan[] = [];
   try {
-    const plans = await planDocker(deps, settings, stacks, notes, selected);
+    const plans = await planDocker(deps, settings, stacks, notes, overrule.size ? overrule : null);
     const chosen = (plan: ImagePlan) => plan.decision.action === 'auto' && (!selected || plan.decision.reason === BY_YOU || selected.has(planKey(plan.repository, plan.to)));
     auto = plans.filter(chosen);
     // "Update now" runs only the chosen containers; the other automatic ones stay planned for the next run.

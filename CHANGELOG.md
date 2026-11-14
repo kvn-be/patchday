@@ -2,6 +2,13 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## 1.5.0 - 2026-11-14
+
+### Added
+
+- **Update all** asks, after a check found waiting containers, whether they go along: **Update all, including waiting** installs every waiting container update Patchday can install itself (major updates, protected services, optional updates and others) next to the automatic ones, each stack backed up first and rolled back if it is not healthy within 5 minutes. **Automatic only** keeps the old behaviour. Scheduled runs are unchanged.
+- **Update all** can be pressed when only waiting containers are left.
+
 ## 1.4.0 - 2026-11-14
 
 ### Added

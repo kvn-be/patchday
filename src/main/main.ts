@@ -7,7 +7,7 @@ import { createPortainerClient } from '../engine/portainer.ts';
 import { exec } from '../engine/exec.ts';
 import { createTagLookup } from '../engine/registry.ts';
 import { createAdvisoryLookup, createReleaseNotesLookup } from '../engine/releases.ts';
-import { lastLines, run } from '../engine/run.ts';
+import { lastLines, run, summarize, type RunOptions } from '../engine/run.ts';
 import { diagnoseWinget, USER_SCOPE } from '../core/failures.ts';
 import { WORKER_FLAG } from '../core/elevation.ts';
 import { backupsToRemove } from '../core/retention.ts';
@@ -112,8 +112,9 @@ function appendLog(message: string): void {
   }).catch(() => {});
 }
 
-async function execute(mode: Report['mode'], onLog: (message: string) => void, onProgress: (items: ProgressItem[]) => void = () => {}, only?: string[]): Promise<Report> {
-  appendLog(`${only ? `update now (${only.join(', ')})` : mode === 'apply' ? 'update run' : 'check'} started`);
+async function execute(mode: Report['mode'], onLog: (message: string) => void, onProgress: (items: ProgressItem[]) => void = () => {}, options: RunOptions = {}): Promise<Report> {
+  const chosen = [...(options.only ?? []), ...(options.force ?? [])];
+  appendLog(`${options.only ? 'update now' : mode === 'apply' ? 'update run' : 'check'}${chosen.length ? ` (${chosen.join(', ')})` : ''} started`);
   const log = (message: string) => { appendLog(message); onLog(message); };
   const settings = await loadSettings();
   const token = await loadToken();
@@ -138,7 +139,7 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
     },
     settings,
     mode,
-    only,
+    options,
   ).finally(() => sudo?.close());
   await saveFile(data('reports', `${report.startedAt.replace(/[:.]/g, '-')}.json`), JSON.stringify(report, null, 2));
   await writeRunLog(report).catch((error) => appendLog(`run log not written: ${(error as Error).message}`));
@@ -268,17 +269,37 @@ function createWindow(): BrowserWindow {
 
 let busy = false;
 
+const validKeys = (keys: unknown): keys is string[] =>
+  Array.isArray(keys) && keys.length > 0 && keys.length <= 200 && keys.every((key) => typeof key === 'string' && /^[\w./:@-]{1,300}$/.test(key));
+
+// Windows: the admin run and the follow-up for chosen waiting containers become one report.
+function mergeForced(main: Report, extra: Report, forced: Set<string>): Report {
+  const names = new Set(main.items.filter((item) => item.key && forced.has(item.key)).map((item) => item.name));
+  const items = [
+    ...main.items.filter((item) => !names.has(item.name) || item.source !== 'docker'),
+    ...extra.items.filter((item) => item.source === 'docker' && names.has(item.name)),
+  ];
+  return { ...main, finishedAt: extra.finishedAt, items, notes: [...main.notes, ...extra.notes], status: summarize(items) };
+}
+
 function registerIpc(): void {
-  const guarded = async (mode: Report['mode'], sender: Electron.WebContents, only?: string[]) => {
+  const guarded = async (mode: Report['mode'], sender: Electron.WebContents, options: RunOptions = {}) => {
     if (busy) throw new Error('A run is already in progress');
     busy = true;
     try {
       const onItems = (items: ProgressItem[]) => sender.send('progress', items);
+      const onLog = (message: string) => sender.send('log', message);
       // "Update now" touches containers only, which need no admin rights, so it runs here on every system.
-      if (only) return await execute(mode, (message) => sender.send('log', message), onItems, only);
+      if (options.only) return await execute(mode, onLog, onItems, options);
       // Windows: real updates go through the task that already holds admin rights.
-      if (mode === 'apply' && (await workerReady(exec))) return await retryUserScope(await runWorker(exec, data('progress.json'), onItems));
-      return await execute(mode, (message) => sender.send('log', message), onItems);
+      if (mode === 'apply' && (await workerReady(exec))) {
+        const main = await retryUserScope(await runWorker(exec, data('progress.json'), onItems));
+        // The worker only runs what is automatic; waiting containers the user chose follow here.
+        if (!options.force?.length) return main;
+        const extra = await execute(mode, onLog, onItems, { only: options.force });
+        return mergeForced(main, extra, new Set(options.force));
+      }
+      return await execute(mode, onLog, onItems, options);
     } finally {
       busy = false;
     }
@@ -308,11 +329,14 @@ function registerIpc(): void {
     return settings;
   });
   ipcMain.handle('check', (event) => guarded('preview', event.sender));
-  ipcMain.handle('update', (event) => guarded('apply', event.sender));
+  ipcMain.handle('update', (event, force: unknown) => {
+    if (force === undefined) return guarded('apply', event.sender);
+    if (!validKeys(force)) throw new Error('Nothing to update');
+    return guarded('apply', event.sender, { force });
+  });
   ipcMain.handle('update-now', (event, keys: unknown) => {
-    const valid = Array.isArray(keys) && keys.length > 0 && keys.length <= 50 && keys.every((key) => typeof key === 'string' && /^[\w./:@-]{1,300}$/.test(key));
-    if (!valid) throw new Error('Nothing to update');
-    return guarded('apply', event.sender, keys as string[]);
+    if (!validKeys(keys)) throw new Error('Nothing to update');
+    return guarded('apply', event.sender, { only: keys });
   });
   ipcMain.handle('token', async (_event, token: string) => {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('This system cannot store the token safely');

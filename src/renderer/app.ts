@@ -7,7 +7,7 @@ interface Api extends PackageApi {
   state(): Promise<{ settings: Settings; reports: Report[]; version: string; platform: string; hasToken: boolean; hasAdminPassword: boolean; adminReady: boolean; packaged: boolean }>;
   saveSettings(patch: Partial<Settings>): Promise<Settings>;
   check(): Promise<Report>;
-  update(): Promise<Report>;
+  update(force?: string[]): Promise<Report>;
   updateNow(keys: string[]): Promise<Report>;
   saveToken(token: string): Promise<void>;
   saveAdminPassword(password: string): Promise<boolean>;
@@ -82,6 +82,8 @@ const formatWhen = (iso: string) => new Date(iso).toLocaleString(t().locale, { w
 const count = (items: ReportItem[], ...outcomes: ReportItem['outcome'][]) => items.filter((item) => outcomes.includes(item.outcome)).length;
 // Optional updates (minor, no security fix) wait quietly in their own section and do not ask for attention.
 const needsYou = (item: ReportItem) => item.outcome === 'waiting' && !item.optional;
+// Waiting containers Patchday can update when you say so, from the latest check.
+const waitingKeys = () => [...new Set((report()?.items ?? []).filter((item) => item.outcome === 'waiting' && item.key).map((item) => item.key as string))];
 
 function bar(tone: 'ok' | 'fail' | 'active' | 'busy', percent: number | null, label: string): HTMLElement {
   const track = element('div', `pd-progress pd-progress-${tone}`);
@@ -261,7 +263,7 @@ function renderOverview(): void {
   const waitText = waiting === 1 ? t().heroWaitSingle : fill(t().heroWaitMany, { count: waiting });
   const text = waiting === 0 ? t().heroTextAuto : planned === 0 ? t().heroTextWait : `${autoText} ${waitText}`;
   $('hero-text').textContent = !current ? t().heroTextNoCheck : ready === 0 ? t().heroTextClear : text;
-  $<HTMLButtonElement>('hero-update').disabled = busy || planned === 0;
+  $<HTMLButtonElement>('hero-update').disabled = busy || (planned === 0 && waitingKeys().length === 0);
   const nav = $('nav-count');
   nav.hidden = ready === 0;
   nav.textContent = String(ready);
@@ -550,6 +552,16 @@ async function start(): Promise<void> {
         showPage('updates');
         void perform(api.check, t().checking);
       } else {
+        // After a check, waiting containers can go along: "Update all, including waiting".
+        const keys = waitingKeys();
+        const extra = $('confirm-waiting');
+        const everything = $<HTMLButtonElement>('confirm-all');
+        extra.hidden = everything.hidden = keys.length === 0;
+        extra.textContent = fill(t().confirmWaiting, { count: keys.length });
+        everything.textContent = fill(t().confirmAll, { count: keys.length });
+        $('confirm-yes').textContent = keys.length ? t().confirmAutoOnly : t().confirmYes;
+        $('confirm-yes').className = `pd-btn ${keys.length ? 'pd-btn-line' : 'pd-btn-main'}`;
+        $<HTMLButtonElement>('confirm-yes').disabled = keys.length > 0 && count(report()?.items ?? [], 'planned') === 0;
         confirm.showModal();
       }
     });
@@ -558,7 +570,13 @@ async function start(): Promise<void> {
   $('confirm-yes').addEventListener('click', () => {
     confirm.close();
     showPage('updates');
-    void perform(api.update, t().updating);
+    void perform(() => api.update(), t().updating);
+  });
+  $('confirm-all').addEventListener('click', () => {
+    const keys = waitingKeys();
+    confirm.close();
+    showPage('updates');
+    void perform(() => api.update(keys), t().updating);
   });
   api.onLog((message) => { $('progress').textContent = message; });
   api.onProgress((items) => {

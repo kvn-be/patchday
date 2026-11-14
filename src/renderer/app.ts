@@ -221,7 +221,6 @@ function renderOverview(): void {
   wheels?.day.set(Math.floor(settings.hourOfWeek / 24), true);
   wheels?.hour.set(settings.hourOfWeek % 24, true);
 
-  $('card-next').textContent = nextRunText();
   const lastRun = reports.find((entry) => entry.mode === 'apply');
   $('card-last').textContent = lastRun ? new Date(lastRun.startedAt).toLocaleDateString(t().locale, { weekday: 'long', day: 'numeric', month: 'long' }) : t().lastNone;
   const pills = $('card-last-pills');
@@ -246,10 +245,14 @@ function setSwitch(id: string, on: boolean): void {
 }
 
 function renderSettings(): void {
+  // The wheel box carries the whole schedule: on or off, day and time, the date it lands on,
+  // and a warning only when the time falls in the day.
   const night = settings.hourOfWeek % 24 < 6;
+  $('when').classList.toggle('off', !settings.scheduleEnabled);
+  $('when-next').textContent = nextRunText();
   const note = $('when-note');
-  note.textContent = night ? t().noteNight : t().noteDay;
-  note.className = `when-note ${night ? 'night' : 'day'}`;
+  note.hidden = night || !settings.scheduleEnabled;
+  note.textContent = t().noteDay;
   all('[data-appearance]').forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.appearance === settings.appearance)));
   setSwitch('enabled', settings.scheduleEnabled);
   setSwitch('enabled-quick', settings.scheduleEnabled);

@@ -2,6 +2,12 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## Unreleased
+
+### Changed
+
+- Overview puts the whole schedule in one box: **Run on this schedule** on top, the day and time wheels, and the date of the next run below. The separate **Next run** card is gone, so the date shows only once. Outside 00:00 to 06:00, a one-line warning says apps can restart while you use them.
+
 ## 1.1.0 - 2026-11-14
 
 ### Added

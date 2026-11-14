@@ -150,7 +150,7 @@ Image tags keep their scheme: `1.2.3-alpine` only moves to another `-alpine` tag
   <img src="docs/images/packages.png" alt="Packages page: one search shows installed packages and packages to install" width="640">
 </p>
 
-A sidebar leads to **Overview**, **Updates**, **Packages** and **History**, with **Settings** at its foot. Every page has its title, one sentence on what it does, and its main action at the top right.
+A sidebar leads to **Overview**, **Updates**, **Packages** and **History**, with **Settings** at its foot. Every page has its title, one sentence on what it does, and its main action at the top right. Once you move between pages, a back arrow left of the title takes you to the page before, like **Alt+Left**, **Cmd+[** on macOS or the back button of a mouse.
 
 | Page | What you can do |
 | --- | --- |

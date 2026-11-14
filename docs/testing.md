@@ -33,6 +33,12 @@ Target machines:
 - [ ] Versions are shown as `3.4.0 → 3.4.1`, times in 24-hour format.
 - [ ] Every **Failed** or **Waiting for you** line names what happened and the next step. **Show details** shows the tool's own message.
 
+## 3b. Back
+
+- [ ] On **Overview**, the back arrow is hidden. Select **See the report**: **Updates** opens with a back arrow left of the title.
+- [ ] Select **History** in the sidebar, then the back arrow: **Updates** again, then **Overview**, where the arrow is gone.
+- [ ] **Alt+Left**, **Cmd+[** on macOS and a mouse's back button go back too. In the package search field, Alt+Left moves the cursor instead.
+
 ## 4. Schedule
 
 - [ ] On **Overview**, turn the **Day** and **Time** wheels to the next full hour that is at least 10 minutes away, with the mouse wheel, by dragging and with the arrow keys. **Next run** below the wheels shows that date and time.

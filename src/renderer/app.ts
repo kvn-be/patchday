@@ -340,6 +340,7 @@ function renderText(): void {
     else node.removeAttribute('aria-current');
   });
   for (const name of PAGES) $(`page-${name}`).hidden = name !== page;
+  renderBack();
 }
 
 function renderAll(): void {
@@ -351,10 +352,37 @@ function renderAll(): void {
   views.render();
 }
 
-function showPage(next: Page): void {
+// The pages visited before this one, newest last, like a browser's back list.
+const visited: Page[] = [];
+const BACK_LABELS: Record<Page, 'backOverview' | 'backUpdates' | 'backPackages' | 'backHistory' | 'backSettings'> = {
+  overview: 'backOverview', updates: 'backUpdates', packages: 'backPackages', history: 'backHistory', settings: 'backSettings',
+};
+
+function renderBack(): void {
+  const back = $<HTMLButtonElement>('back');
+  const previous = visited.at(-1);
+  back.hidden = !previous;
+  back.closest('.pages')?.classList.toggle('has-back', Boolean(previous));
+  if (!previous) return;
+  const label = t()[BACK_LABELS[previous]] as string;
+  back.setAttribute('aria-label', label);
+  back.title = label;
+}
+
+function showPage(next: Page, remember = true): void {
+  if (next === page) return;
+  if (remember) {
+    visited.push(page);
+    if (visited.length > 20) visited.shift();
+  }
   page = next;
   renderText();
   views.open(next);
+}
+
+function goBack(): void {
+  const previous = visited.pop();
+  if (previous) showPage(previous, false);
 }
 
 function setBusy(label: string): void {
@@ -431,6 +459,17 @@ async function start(): Promise<void> {
 
   all('[data-page]').forEach((node) => node.addEventListener('click', () => showPage(node.dataset.page as Page)));
   all('[data-goto]').forEach((node) => node.addEventListener('click', () => showPage(node.dataset.goto as Page)));
+  $('back').addEventListener('click', goBack);
+  // Also the usual ways back: Alt+Left, Cmd+[ on macOS, and the back button of a mouse.
+  document.addEventListener('keydown', (event) => {
+    const field = event.target instanceof HTMLElement && event.target.closest('input, textarea, [contenteditable]');
+    if (field) return;
+    if ((event.altKey && event.key === 'ArrowLeft') || (event.metaKey && event.key === '[')) {
+      event.preventDefault();
+      goBack();
+    }
+  });
+  document.addEventListener('mouseup', (event) => { if (event.button === 3) goBack(); });
   all('[data-lang]').forEach((node) => {
     node.addEventListener('click', async () => { await patch({ language: node.dataset.lang as Language }); renderAll(); });
   });

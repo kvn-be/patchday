@@ -24,6 +24,10 @@ button { font: inherit; color: inherit; }
 .self-line .pd-link { font-size: 12px; }
 
 .pages { position: relative; flex: 1; min-width: 0; padding: 18px 16px 4px 0; }
+/* Back: one button for every page, left of the title. It shows once you have moved between pages. */
+.back { position: absolute; z-index: 2; top: 18px; left: 0; }
+.back[hidden] { display: none; }
+.pages.has-back .pd-page-head > div:first-child { padding-left: 58px; }
 .page { height: 100%; display: flex; flex-direction: column; gap: 18px; min-height: 0; }
 .page[hidden] { display: none; }
 .panel { flex: 1; min-height: 0; overflow-y: auto; border-radius: var(--radius-panel); }

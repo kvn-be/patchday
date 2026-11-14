@@ -2,6 +2,12 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## Unreleased
+
+### Added
+
+- A back arrow left of each page title takes you to the page before. **Alt+Left**, **Cmd+[** on macOS and the back button of a mouse do the same.
+
 ## 1.1.2 - 2026-11-14
 
 ### Fixed

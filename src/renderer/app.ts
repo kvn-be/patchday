@@ -26,6 +26,7 @@ declare global {
     Patchday: {
       mountWeekDial(svg: SVGSVGElement, input: HTMLInputElement, options: { hour: number; days: readonly string[]; short: readonly string[]; onChange(hour: number): void }): unknown;
       startParallax(root?: HTMLElement): () => void;
+      mountWheel(root: HTMLElement, options: { items: { value: number; label: string }[]; value: number; label?: string; rowHeight?: number; onChange(value: number): void }): { set(value: number, animate?: boolean): void; get(): number };
     };
   }
 }
@@ -69,7 +70,7 @@ const PILL: Record<ReportItem['outcome'], [string, keyof typeof STRINGS.en]> = {
   'rolled-back': ['back', 'bBack'],
   failed: ['back', 'bFailed'],
 };
-const PHASES = { backup: 'phaseBackup', update: 'phaseUpdate', test: 'phaseTest', rollback: 'phaseRollback', retry: 'phaseRetry' } as const;
+const PHASES = { backup: 'phaseBackup', update: 'phaseUpdate', test: 'phaseTest', rollback: 'phaseRollback', retry: 'phaseRetry', reinstall: 'phaseReinstall' } as const;
 
 const formatWhen = (iso: string) => new Date(iso).toLocaleString(t().locale, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
 const count = (items: ReportItem[], ...outcomes: ReportItem['outcome'][]) => items.filter((item) => outcomes.includes(item.outcome)).length;
@@ -191,10 +192,8 @@ function renderOverview(): void {
   nav.hidden = ready === 0;
   nav.textContent = String(ready);
 
-  const hour = settings.hourOfWeek;
-  $('mini-hand').style.transform = `rotate(${(hour / 168) * 360}deg)`;
-  $('mini-day').textContent = t().days[Math.floor(hour / 24)];
-  $('mini-time').textContent = `${String(hour % 24).padStart(2, '0')}:00`;
+  wheels?.day.set(Math.floor(settings.hourOfWeek / 24), true);
+  wheels?.hour.set(settings.hourOfWeek % 24, true);
 
   $('card-next').textContent = nextRunText();
   const lastRun = reports.find((entry) => entry.mode === 'apply');
@@ -245,6 +244,48 @@ function renderSchedule(): void {
   }
 }
 
+// Day and time on Overview: the same setting as the dial on Schedule, saved once the wheel rests.
+let wheels: { day: ReturnType<Window['Patchday']['mountWheel']>; hour: ReturnType<Window['Patchday']['mountWheel']> } | null = null;
+
+function setHour(hour: number): void {
+  if (hour === settings.hourOfWeek) return;
+  settings.hourOfWeek = hour;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => void api.saveSettings({ hourOfWeek: hour }), 500);
+}
+
+function mountWheels(): void {
+  const dayBox = $('wheel-day');
+  const hourBox = $('wheel-hour');
+  dayBox.replaceChildren();
+  hourBox.replaceChildren();
+  const day = window.Patchday.mountWheel(dayBox, {
+    items: t().days.map((label, value) => ({ value, label })),
+    value: Math.floor(settings.hourOfWeek / 24),
+    label: t().wheelDay,
+    rowHeight: 36,
+    onChange(value) {
+      setHour(value * 24 + (settings.hourOfWeek % 24));
+      renderSchedule();
+      mountDial();
+      renderOverview();
+    },
+  });
+  const hour = window.Patchday.mountWheel(hourBox, {
+    items: Array.from({ length: 24 }, (_, value) => ({ value, label: `${String(value).padStart(2, '0')}:00` })),
+    value: settings.hourOfWeek % 24,
+    label: t().wheelTime,
+    rowHeight: 36,
+    onChange(value) {
+      setHour(Math.floor(settings.hourOfWeek / 24) * 24 + value);
+      renderSchedule();
+      mountDial();
+      renderOverview();
+    },
+  });
+  wheels = { day, hour };
+}
+
 function mountDial(): void {
   const slot = $('dial-slot');
   slot.replaceChildren();
@@ -265,12 +306,10 @@ function mountDial(): void {
     days: t().days,
     short: t().short,
     onChange(hour) {
-      settings.hourOfWeek = hour;
+      // The system scheduler is only rewritten once the hand rests.
+      setHour(hour);
       renderSchedule();
       renderOverview();
-      // The system scheduler is only rewritten once the hand rests.
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => void api.saveSettings({ hourOfWeek: hour }), 500);
     },
   });
 }
@@ -300,6 +339,7 @@ function renderText(): void {
 function renderAll(): void {
   renderText();
   mountDial();
+  mountWheels();
   renderSchedule();
   renderOverview();
   renderReport();

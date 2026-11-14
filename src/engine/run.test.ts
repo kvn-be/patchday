@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bumpImage } from '../core/compose.ts';
-import { isNewer, MAC_SWAP_SCRIPT, macChecksum, pickRelease } from '../core/selfupdate.ts';
+import { isNewer, MAC_SWAP_SCRIPT, macChecksum, macSize, pickRelease } from '../core/selfupdate.ts';
 import { parseWingetUpgrade } from '../core/winget.ts';
 import { registryRef } from './registry.ts';
 import { run, type Deps } from './run.ts';
@@ -211,6 +211,14 @@ test('self update picks the highest published version and skips drafts', () => {
   assert.equal(pickRelease([release('v0.2.0'), release('v0.1.0')], '0.2.0'), null);
   assert.equal(isNewer('v0.10.0', '0.9.9'), true);
   assert.equal(isNewer('v1.0.0-beta', '0.9.9'), false);
+  // A release still uploading, or missing this Mac's files, is skipped for the newest complete one.
+  const asset = (name: string, state = 'uploaded') => ({ name, browser_download_url: `https://x/${name}`, state });
+  const needs = (version: string) => ['latest-mac.yml', `Patchday-${version}-arm64.zip`];
+  const uploading = { tag_name: 'v1.1.0', draft: false, assets: [asset('latest-mac.yml'), asset('Patchday-1.1.0-arm64.zip', 'starter')] };
+  const partial = { tag_name: 'v1.0.1', draft: false, assets: [asset('latest-mac.yml')] };
+  const complete = { tag_name: 'v1.0.0', draft: false, assets: [asset('latest-mac.yml'), asset('Patchday-1.0.0-arm64.zip')] };
+  assert.equal(pickRelease([uploading, partial, complete], '0.2.3', needs)?.version, '1.0.0');
+  assert.equal(macSize('files:\n  - url: a.zip\n    sha512: X\n    size: 42\npath: a.zip\n', 'a.zip'), 42);
 });
 
 test('macChecksum reads the checksum of exactly one file', () => {

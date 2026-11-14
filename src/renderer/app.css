@@ -41,12 +41,11 @@ button { font: inherit; color: inherit; }
 .hero-text { flex: 1; display: grid; gap: 12px; justify-items: start; }
 .hero h2 { font: 400 44px/1.05 var(--font-display); }
 .hero p { max-width: 560px; font-size: 16px; color: var(--ink-2); }
-.mini-dial { position: relative; width: 196px; height: 196px; flex: none; border-radius: 50%; background: rgba(255, 255, 255, .55); border: 1px solid rgba(255, 255, 255, .95); box-shadow: inset 0 2px 0 #ffffff, inset 0 -8px 20px rgba(14, 19, 48, .06), 0 18px 36px -20px rgba(30, 40, 90, .5); }
-.mini-dial .ticks { position: absolute; inset: 8px; border-radius: 50%; background: repeating-conic-gradient(from -.4deg, rgba(14, 19, 48, .3) 0deg .8deg, transparent .8deg 2.142857deg); -webkit-mask: radial-gradient(circle, transparent 82px, #000 83px, #000 89px, transparent 90px); mask: radial-gradient(circle, transparent 82px, #000 83px, #000 89px, transparent 90px); }
-.mini-dial .hand { position: absolute; left: 97px; top: 10px; width: 2px; height: 38px; border-radius: 2px; background: var(--brass); transform-origin: 1px 88px; }
-.mini-dial .face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
-.mini-dial .face span { font-size: 13px; color: var(--ink-2); }
-.mini-dial .face b { font: 400 40px/1 var(--font-display); }
+/* When: two wheels for day and time, the schedule at a glance and in reach. */
+.when { flex: none; display: grid; grid-template-columns: 190px 120px; gap: 12px; padding: 12px 14px 8px; border-radius: 22px; background: rgba(255, 255, 255, .45); border: 1px solid rgba(255, 255, 255, .9); box-shadow: inset 0 1px 0 #ffffff, 0 18px 36px -22px rgba(30, 40, 90, .5); }
+.when-col { display: grid; gap: 2px; min-width: 0; }
+.when-head { padding-left: 4px; font-size: 13px; font-weight: 600; color: var(--ink-3); text-align: center; }
+.when .pd-wheel { height: 180px; }
 .cards { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 .card { display: flex; flex-direction: column; gap: 10px; padding: 20px 24px; border-radius: var(--radius-panel); min-width: 0; }
 .card h3 { font-size: 14px; font-weight: 600; color: var(--ink-2); }

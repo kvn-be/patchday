@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Patchday","components":[{"name":"Button"},{"name":"Glass"},{"name":"Ground"},{"name":"ListRow"},{"name":"Pill"},{"name":"ProgressBar"},{"name":"Segmented"},{"name":"Sidebar"},{"name":"Switch"},{"name":"WeekDial"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Patchday","components":[{"name":"Button"},{"name":"Glass"},{"name":"Ground"},{"name":"ListRow"},{"name":"Pill"},{"name":"ProgressBar"},{"name":"Segmented"},{"name":"Sidebar"},{"name":"Switch"},{"name":"WeekDial"},{"name":"Wheel"}]} */
 (function () {
   // Components are plain CSS classes from bundle.css. Only the dial needs a script.
   function mountWeekDial(dial, slider, options) {
@@ -63,5 +63,79 @@
     document.documentElement.addEventListener('pointerleave', rest);
     return function stop() { window.removeEventListener('pointermove', move); document.documentElement.removeEventListener('pointerleave', rest); rest(); };
   }
-  window.Patchday = { mountWeekDial: mountWeekDial, startParallax: startParallax };
+  // A drum of choices: the chosen one sits in the band in the middle, its neighbours tilt away and fade.
+  // items: [{ value, label }]. Returns { set(value, animate), get() }.
+  function mountWheel(root, options) {
+    var opt = options || {}, items = opt.items || [], ROW = opt.rowHeight || 44;
+    var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var list = document.createElement('div');
+    list.className = 'pd-wheel-list';
+    list.setAttribute('role', 'listbox');
+    list.setAttribute('tabindex', '0');
+    if (opt.label) list.setAttribute('aria-label', opt.label);
+    var id = 'pd-wheel-' + Math.random().toString(36).slice(2, 8);
+    var nodes = items.map(function (item, i) {
+      var node = document.createElement('div');
+      node.className = 'pd-wheel-item';
+      node.id = id + '-' + i;
+      node.setAttribute('role', 'option');
+      node.textContent = item.label;
+      node.addEventListener('click', function () { go(i, true); });
+      list.appendChild(node);
+      return node;
+    });
+    root.classList.add('pd-wheel');
+    root.style.setProperty('--pd-row', ROW + 'px');
+    root.appendChild(list);
+
+    var index = Math.max(0, indexOf(opt.value));
+    var frame = 0, settle = 0, lastSent = index;
+    function indexOf(value) { for (var i = 0; i < items.length; i++) if (items[i].value === value) return i; return -1; }
+    function paint() {
+      frame = 0;
+      var center = list.scrollTop / ROW;
+      nodes.forEach(function (node, i) {
+        var d = i - center, far = Math.min(Math.abs(d), 3);
+        node.style.opacity = String(Math.max(0, 1 - far * 0.3));
+        node.style.transform = still ? '' : 'rotateX(' + (-d * 18).toFixed(1) + 'deg) scale(' + (1 - far * 0.06).toFixed(3) + ')';
+      });
+      var nearest = Math.max(0, Math.min(items.length - 1, Math.round(center)));
+      if (nearest !== index) { index = nearest; mark(); }
+    }
+    function mark() {
+      nodes.forEach(function (node, i) { node.setAttribute('aria-selected', String(i === index)); });
+      list.setAttribute('aria-activedescendant', nodes[index] ? nodes[index].id : '');
+    }
+    function commit() {
+      settle = 0;
+      // Snap exactly onto the row, then report once.
+      if (Math.abs(list.scrollTop - index * ROW) > 1) list.scrollTo({ top: index * ROW, behavior: still ? 'auto' : 'smooth' });
+      if (index !== lastSent) { lastSent = index; if (opt.onChange) opt.onChange(items[index].value); }
+    }
+    function go(i, animate) {
+      index = Math.max(0, Math.min(items.length - 1, i));
+      mark();
+      list.scrollTo({ top: index * ROW, behavior: animate && !still ? 'smooth' : 'auto' });
+      clearTimeout(settle);
+      settle = setTimeout(commit, animate && !still ? 380 : 0);
+    }
+    list.addEventListener('scroll', function () {
+      if (!frame) frame = requestAnimationFrame(paint);
+      clearTimeout(settle);
+      settle = setTimeout(commit, 140);
+    });
+    list.addEventListener('keydown', function (event) {
+      var step = { ArrowDown: 1, ArrowUp: -1, PageDown: 3, PageUp: -3 }[event.key];
+      if (step) { event.preventDefault(); go(index + step, true); }
+      else if (event.key === 'Home') { event.preventDefault(); go(0, true); }
+      else if (event.key === 'End') { event.preventDefault(); go(items.length - 1, true); }
+    });
+    mark();
+    requestAnimationFrame(function () { list.scrollTop = index * ROW; paint(); });
+    return {
+      set: function (value, animate) { var i = indexOf(value); if (i >= 0 && i !== index) { lastSent = i; go(i, animate); } },
+      get: function () { return items[index] ? items[index].value : undefined; },
+    };
+  }
+  window.Patchday = { mountWeekDial: mountWeekDial, startParallax: startParallax, mountWheel: mountWheel };
 })();

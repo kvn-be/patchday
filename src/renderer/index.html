@@ -79,7 +79,11 @@
             <button class="pd-btn pd-btn-line" type="button" data-goto="updates" data-i18n="reviewUpdates"></button>
           </div>
         </div>
-        <div class="mini-dial" aria-hidden="true"><div class="ticks"></div><i class="hand" id="mini-hand"></i><div class="face"><span id="mini-day"></span><b id="mini-time"></b></div></div>
+        <div class="when" role="group" aria-labelledby="when-title">
+          <span class="sr-only" id="when-title" data-i18n="whenTitle"></span>
+          <div class="when-col"><span class="when-head" data-i18n="wheelDay"></span><div id="wheel-day"></div></div>
+          <div class="when-col"><span class="when-head" data-i18n="wheelTime"></span><div id="wheel-hour"></div></div>
+        </div>
       </section>
       <div class="cards">
         <section class="card pd-glass">

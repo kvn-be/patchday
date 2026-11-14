@@ -116,6 +116,15 @@ body { margin: 0; background: var(--ground); color: var(--ink); font: 400 15px/1
 .pd-dial .hand { stroke: var(--brass); stroke-width: 3; stroke-linecap: round; }
 .pd-dial .pin { fill: var(--brass); }
 
+/* Wheel: a drum of choices, five rows tall. The band marks the chosen row. */
+.pd-wheel { position: relative; height: calc(var(--pd-row, 44px) * 5); perspective: 600px; }
+.pd-wheel::before { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - var(--pd-row, 44px) / 2); height: var(--pd-row, 44px); border-radius: var(--radius-control); background: rgba(255, 255, 255, .75); border: 1px solid rgba(255, 255, 255, .95); box-shadow: inset 0 1px 0 #ffffff, 0 6px 16px -10px rgba(14, 19, 48, .45); pointer-events: none; }
+.pd-wheel-list { position: relative; height: 100%; overflow-y: auto; scroll-snap-type: y mandatory; padding-block: calc(var(--pd-row, 44px) * 2); box-sizing: border-box; scrollbar-width: none; -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); outline: none; transform-style: preserve-3d; }
+.pd-wheel-list::-webkit-scrollbar { display: none; }
+.pd-wheel:has(.pd-wheel-list:focus-visible)::before { outline: 3px solid var(--brass); outline-offset: 2px; }
+.pd-wheel-item { height: var(--pd-row, 44px); display: flex; align-items: center; justify-content: center; scroll-snap-align: center; color: var(--ink-2); font: 400 22px/1 var(--font-text); font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; user-select: none; transform-origin: center center; will-change: transform, opacity; }
+.pd-wheel-item[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+
 @media (prefers-reduced-motion: reduce) {
   .pd-blob { transform: none; transition: none; }
   .pd-btn, .pd-progress span, .pd-switch, .pd-switch span { transition: none; }

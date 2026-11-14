@@ -226,6 +226,48 @@ export function actionCommand(action: PackageAction, entry: Pick<Package, 'manag
   }
 }
 
+// ---------- Repair ----------
+
+export interface RepairPlan {
+  // Drops cached downloads and fetches the package again; checksums are still verified.
+  clean: Command[];
+  // Removes the package and installs the current version fresh. Settings of most apps stay.
+  reinstall: Command[];
+}
+
+export function repairPlan(entry: Pick<Package, 'manager' | 'id' | 'kind'>): RepairPlan {
+  if (!isSafeId(entry.manager, entry.id)) throw new Error(`${entry.id} is not a valid package name`);
+  switch (entry.manager) {
+    case 'brew': {
+      const kind = entry.kind === 'cask' ? '--cask' : '--formula';
+      return {
+        clean: [{ command: 'brew', args: ['fetch', '--force', kind, entry.id] }],
+        reinstall: [{ command: 'brew', args: ['reinstall', kind, entry.id] }],
+      };
+    }
+    case 'winget': {
+      const target = wingetTarget(entry.id);
+      return {
+        clean: [{ command: 'winget', args: ['source', 'update'] }],
+        reinstall: [
+          { command: 'winget', args: ['uninstall', ...target, '--silent', ...WINGET_FLAGS] },
+          { command: 'winget', args: ['install', ...target, '--silent', '--accept-package-agreements', ...WINGET_FLAGS] },
+        ],
+      };
+    }
+    case 'choco':
+      return {
+        clean: [elevatedChoco(['cache', 'remove', '-y'])],
+        reinstall: [elevatedChoco(['install', entry.id, '-y', '--force', '--no-progress'])],
+      };
+    case 'scoop':
+      return {
+        clean: [scoopCommand(['cache', 'rm', entry.id.split('/').pop() as string])],
+        reinstall: [scoopCommand(['uninstall', entry.id.split('/').pop() as string]), scoopCommand(['install', entry.id])],
+      };
+  }
+}
+
 // ---------- Export and import ----------
 
 export interface PackageList {

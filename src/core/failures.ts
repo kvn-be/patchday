@@ -5,6 +5,8 @@ export interface Diagnosis {
   fix?: Fix;
   // The install worked, but needs something else to finish.
   applied?: boolean;
+  // A fresh install would not help: rights, policy, space, a running app or a decision by the user.
+  final?: boolean;
 }
 
 const UNKNOWN = 'installer stopped with an error';
@@ -17,15 +19,15 @@ function hex(code: number): string {
 
 // From winget's return code documentation.
 const WINGET: Record<number, Diagnosis> = {
-  0x8a150010: { reason: 'no installer for this system' },
+  0x8a150010: { reason: 'no installer for this system', final: true },
   0x8a150011: { reason: 'download did not match its checksum', fix: 'refresh-retry' },
-  0x8a150019: { reason: 'needs administrator rights' },
+  0x8a150019: { reason: 'needs administrator rights', final: true },
   0x8a15002b: { reason: 'no update path from the installed version', fix: 'force-retry' },
-  0x8a15003a: { reason: 'blocked by a Group Policy' },
-  0x8a15004f: { reason: 'installed version is already newer' },
+  0x8a15003a: { reason: 'blocked by a Group Policy', final: true },
+  0x8a15004f: { reason: 'installed version is already newer', applied: true },
   0x8a150050: { reason: 'installed version is unknown' },
   0x8a150056: { reason: 'installer refuses to run as administrator' },
-  0x8a150068: { reason: 'pinned in winget' },
+  0x8a150068: { reason: 'pinned in winget', final: true },
   0x8a15006b: { reason: 'dependencies could not be downloaded', fix: 'retry' },
   0x8a150086: { reason: 'download was empty', fix: 'retry' },
   0x8a15008e: { reason: 'new version uses a different installer, reinstall it once' },
@@ -33,16 +35,16 @@ const WINGET: Record<number, Diagnosis> = {
   0x8a150102: { reason: 'another installation is running', fix: 'wait-retry' },
   0x8a150103: { reason: 'files are in use, close the app', fix: 'wait-retry' },
   0x8a150104: { reason: 'a required component is missing' },
-  0x8a150105: { reason: 'disk is full' },
-  0x8a150106: { reason: 'not enough memory' },
+  0x8a150105: { reason: 'disk is full', final: true },
+  0x8a150106: { reason: 'not enough memory', final: true },
   0x8a150107: { reason: 'no internet connection', fix: 'wait-retry' },
   0x8a150109: { reason: 'restart to finish', applied: true },
-  0x8a15010a: { reason: 'restart Windows, then it updates' },
+  0x8a15010a: { reason: 'restart Windows, then it updates', final: true },
   0x8a15010b: { reason: 'Windows restarts to finish', applied: true },
-  0x8a15010c: { reason: 'installation was cancelled' },
+  0x8a15010c: { reason: 'installation was cancelled', final: true },
   0x8a15010d: { reason: 'another version is already installed' },
-  0x8a15010e: { reason: 'a newer version is already installed' },
-  0x8a15010f: { reason: 'blocked by your organization' },
+  0x8a15010e: { reason: 'a newer version is already installed', applied: true },
+  0x8a15010f: { reason: 'blocked by your organization', final: true },
   0x8a150110: { reason: 'dependencies could not be installed' },
   0x8a150111: { reason: 'app is in use, close it', fix: 'wait-retry' },
 };
@@ -56,18 +58,18 @@ export function diagnoseWinget(code: number, output: string): Diagnosis {
   // Installers report their own codes: 1602 cancelled, 1618 busy, 3010 restart needed.
   if (code === 3010 || code === 1641) return { reason: 'restart to finish', applied: true };
   if (code === 1618) return { reason: 'another installation is running', fix: 'wait-retry' };
-  if (code === 1602) return { reason: 'installation was cancelled' };
+  if (code === 1602) return { reason: 'installation was cancelled', final: true };
   if (/network|timed? ?out|connection/i.test(output)) return { reason: 'download failed', fix: 'retry' };
   return { reason: `${UNKNOWN} (${hex(code)})` };
 }
 
 const CHOCO: Array<[RegExp, Diagnosis]> = [
-  [/not.*elevated|administrative permissions|Access to the path .* is denied/i, { reason: 'needs administrator rights' }],
+  [/not.*elevated|administrative permissions|Access to the path .* is denied/i, { reason: 'needs administrator rights', final: true }],
   [/being used by another process|in use/i, { reason: 'app is in use, close it', fix: 'wait-retry' }],
   [/another (instance|process)|lock file/i, { reason: 'another installation is running', fix: 'wait-retry' }],
-  [/checksum/i, { reason: 'download did not match its checksum' }],
+  [/checksum/i, { reason: 'download did not match its checksum', fix: 'refresh-retry' }],
   [/timed? ?out|Unable to connect|could not be resolved|\(404\)|\(503\)/i, { reason: 'download failed', fix: 'retry' }],
-  [/not enough space|disk full/i, { reason: 'disk is full' }],
+  [/not enough space|disk full/i, { reason: 'disk is full', final: true }],
   [PATH_TEXT, { reason: 'a folder of the installed app is missing', fix: 'force-retry' }],
 ];
 
@@ -81,11 +83,11 @@ const BREW: Array<[RegExp, Diagnosis]> = [
   [/SHA-?256 mismatch|checksum/i, { reason: 'download did not match its checksum', fix: 'refresh-retry' }],
   [/another active Homebrew|has already locked/i, { reason: 'Homebrew is busy', fix: 'wait-retry' }],
   [/Could not resolve|timed out|Connection|Failure while executing.*curl|Download failed/i, { reason: 'download failed', fix: 'retry' }],
-  [/sudo:|a password is required|a terminal is required|must be run as root/i, { reason: 'needs your admin password' }],
-  [/is (still )?running|quit the app/i, { reason: 'app is running, close it' }],
-  [/No space left/i, { reason: 'disk is full' }],
-  [/has been disabled|is disabled|deprecated/i, { reason: 'discontinued by Homebrew' }],
-  [/Permission denied|Operation not permitted/i, { reason: 'macOS denied access' }],
+  [/sudo:|a password is required|a terminal is required|must be run as root/i, { reason: 'needs your admin password', final: true }],
+  [/is (still )?running|quit the app/i, { reason: 'app is running, close it', final: true }],
+  [/No space left/i, { reason: 'disk is full', final: true }],
+  [/has been disabled|is disabled|deprecated/i, { reason: 'discontinued by Homebrew', final: true }],
+  [/Permission denied|Operation not permitted/i, { reason: 'macOS denied access', final: true }],
 ];
 
 export function diagnoseBrew(output: string): Diagnosis {
@@ -96,16 +98,16 @@ const ELEVATION_CANCELLED = /canceled by the user|cancelled by the user|vom Benu
 
 // Scoop prints its messages in English only.
 export function diagnoseScoop(output: string): Diagnosis {
-  if (ELEVATION_CANCELLED.test(output)) return { reason: 'the admin prompt was cancelled' };
+  if (ELEVATION_CANCELLED.test(output)) return { reason: 'the admin prompt was cancelled', final: true };
   if (/is already installed|Latest versions for all apps are installed|is up to date/i.test(output)) return { reason: 'already up to date', applied: true };
-  if (/Couldn't find manifest|isn't installed|is not installed/i.test(output)) return { reason: 'Scoop does not know this app' };
+  if (/Couldn't find manifest/i.test(output)) return { reason: 'Scoop does not know this app', final: true };
   if (/is still running|access is denied|being used by another process/i.test(output)) return { reason: 'app is running, close it', fix: 'wait-retry' };
-  if (/hash check failed/i.test(output)) return { reason: 'download did not match its checksum', fix: 'retry' };
+  if (/hash check failed/i.test(output)) return { reason: 'download did not match its checksum', fix: 'refresh-retry' };
   return { reason: 'Scoop stopped with an error' };
 }
 
 // Chocolatey changes run through the Windows admin prompt.
 export function diagnoseElevated(code: number, output: string): Diagnosis {
-  if (ELEVATION_CANCELLED.test(output)) return { reason: 'the admin prompt was cancelled' };
+  if (ELEVATION_CANCELLED.test(output)) return { reason: 'the admin prompt was cancelled', final: true };
   return diagnoseChoco(code, output);
 }

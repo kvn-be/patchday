@@ -30,9 +30,13 @@ export function sessionAllows(session: Session | null, token: string | undefined
 
 const quote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
 
-// The helper only says how to start Patchday; it never holds the password.
-export function askpassScript(program: string[]): string {
-  return `#!/bin/sh\nexec ${program.map(quote).join(' ')} ${ASKPASS_FLAG}\n`;
+// The helper only says how to start Patchday and carries the run's token; it never holds the password.
+// The token sits in the script, not in the environment: Homebrew restarts itself with `env -i` and keeps
+// only HOMEBREW_* and a few other variables, so anything else never reaches sudo. The script is written
+// for each run and removed when the run ends.
+export function askpassScript(program: string[], token: string, env: Record<string, string> = {}): string {
+  const vars = Object.entries({ ...env, [ASKPASS_TOKEN_ENV]: token }).map(([name, value]) => `${name}=${quote(value)}`).join(' ');
+  return `#!/bin/sh\n${vars} exec ${program.map(quote).join(' ')} ${ASKPASS_FLAG}\n`;
 }
 
 // Asks sudo itself whether the password is right, then forgets the login again.

@@ -4,9 +4,22 @@ All notable changes to Patchday are listed here. Versions follow [semantic versi
 
 ## Unreleased
 
+### Added
+
+- Day and time wheels on Overview replace the week dial: turn them with the mouse, by dragging or with the arrow keys.
+- Dark design, and **Appearance** in **Settings**: system, light or dark.
+- Each update shows its steps while it runs: back up, update, test and done for containers; install, repair and done for packages.
+- **Export logs** on **History** saves every run as text, with the reason and the tool's output for each failed update. A log book in `logs/` keeps the details.
+- Installs repair themselves in three steps: install, a targeted repair, then a fresh install with a cleared download. They stop early only where a fresh install cannot help.
+
 ### Changed
 
-- The design system is Liquid Glass too: one light theme, new tokens, and components for glass, buttons, pills, switches, segmented controls, the sidebar, list rows, progress, the week dial and the parallax ground. The app takes its components from it instead of its own copies.
+- The Schedule page is gone. Day and time are on Overview; the switches, **Never update**, appearance and Portainer are on a new **Settings** page.
+- The design system is Liquid Glass too: a light and a dark theme, new tokens, and components for glass, buttons, pills, switches, segmented controls, the sidebar, list rows, progress, the wheel, the update steps and the parallax ground. The app takes its components from it instead of its own copies.
+
+### Fixed
+
+- `download did not match its checksum` when Patchday updated itself: releases now go public only once all files are uploaded, Patchday skips incomplete releases, checks the size, downloads up to three times and falls back to the disk image.
 
 ## 1.0.0 - 2026-11-13
 

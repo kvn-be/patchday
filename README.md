@@ -44,7 +44,7 @@
 
 ## What it does
 
-- **Pick your own time.** Drag the hand on a dial with all 168 hours of the week.
+- **Pick your own time.** Turn two wheels on Overview: the day and the hour of the weekly run.
 - **See changes before they happen.** **Check now** lists every update and changes nothing.
 - **Update packages.** Homebrew on macOS, winget, Chocolatey and Scoop on Windows.
 - **Manage packages.** See everything installed, search all package managers at once, and install, update or remove several packages in one go.
@@ -54,15 +54,17 @@
 - **Update Docker containers.** Patchday finds Compose stacks by itself and works with Portainer if you use it.
 - **Stay in control.** Risky updates become suggestions that wait for your decision.
 - **Recover from bad updates.** A stack that does not come back healthy returns to its old version.
-- **Watch it happen.** Every update has its own progress bar, and failures show a short reason.
-- **Fix common failures.** Busy apps, bad downloads and network errors are retried once automatically.
+- **Watch it happen.** Every update shows its steps as they happen, and failures show a short reason.
+- **Fix failures by itself.** A failed install is repaired step by step: retry, refresh, and finally a fresh install. It stops only where that cannot help, such as missing rights or an app that is still running.
+- **Find out why.** **Export logs** saves every run with the reason and the tool's own output for each failed update.
 - **Update itself.** Patchday checks once a day, downloads a new version in the background and installs it when you close it. You can turn this off.
 - **Allow admin rights once.** On Windows, one confirmation replaces a prompt for every app.
-- **Easy to find your way.** A sidebar with five places, and every page built the same way.
-- **English and German.** A light design in layered glass.
+- **Easy to find your way.** A sidebar with four places and Settings, and every page built the same way.
+- **Light or dark.** Layered glass in both, following your system or your choice.
+- **English and German.**
 
 <p align="center">
-  <img src="docs/images/schedule.png" alt="Schedule page with the week dial set to Sunday at 03:00" width="420">
+  <img src="docs/images/settings.png" alt="Settings page in the dark design" width="420">
   <img src="docs/images/german.png" alt="Patchday overview in German" width="420">
 </p>
 
@@ -91,9 +93,9 @@ A Homebrew tap is planned but not available yet.
 
 1. On **Overview**, select **Check now**. Patchday lists what would change, and nothing is installed.
 2. Open **Updates** and read the list. **Planned** would run automatically, **Waiting for you** would not.
-3. Open **Schedule** and pick a time on the dial. The arcs mark the quiet hours from 00:00 to 06:00.
+3. On **Overview**, turn the **Day** and **Time** wheels to when the weekly run should start. Night hours from 00:00 to 06:00 are safest.
 4. Turn on **Run on this schedule**. Scheduled runs now report what would change.
-5. When you trust the results, turn on **Install updates on schedule** on the same page.
+5. When you trust the results, open **Settings** and turn on **Install updates on schedule**.
 
 To update right away, select **Update all** and confirm. Containers and apps may restart.
 
@@ -148,18 +150,18 @@ Image tags keep their scheme: `1.2.3-alpine` only moves to another `-alpine` tag
   <img src="docs/images/packages.png" alt="Packages page: one search shows installed packages and packages to install" width="640">
 </p>
 
-A sidebar leads to five places: **Overview**, **Updates**, **Packages**, **Schedule** and **History**. Every page has its title, one sentence on what it does, and its main action at the top right.
+A sidebar leads to **Overview**, **Updates**, **Packages** and **History**, with **Settings** at its foot. Every page has its title, one sentence on what it does, and its main action at the top right.
 
 | Page | What you can do |
 | --- | --- |
-| Overview | See how many updates are ready, the next and the last run, and what waits for your decision. |
+| Overview | See how many updates are ready, pick the day and time of the weekly run, and see the next and the last run and what waits for your decision. |
 | Updates | The latest check or run, grouped into what waits for you, problems, what installs by itself and what was applied. |
 | Packages | One search for both: installed packages first, packages you can add below. Update, skip a version or uninstall right in the row. |
-| Schedule | Pick the hour on the week dial, choose what happens then, and keep the **Never update** list. |
-| History | The last 1000 installs, updates, removals and runs, with the tool's message for failures. |
+| Settings | Choose what happens at a run, keep the **Never update** list, pick light, dark or system appearance, and connect Portainer. |
+| History | The last 1000 installs, updates, removals and runs, with the tool's message for failures. **Export logs** saves all of it as a text file. |
 
 - **Skip** hides one version of a package. The next newer version shows up again.
-- **Never update** on the **Schedule** page leaves a package or image alone, in the package list and in scheduled runs.
+- **Never update** in **Settings** leaves a package or image alone, in the package list and in scheduled runs.
 - **Export list** saves your installed packages as a JSON file. **Import list** reads such a file and lists the packages that are not installed yet, ready to install. Entries this system cannot install are left out and counted.
 
 Installs and removals you start yourself run in your own user account, never through the admin task. On Windows, installers may ask for admin rights, and Chocolatey always does.
@@ -185,7 +187,7 @@ While Portainer is running and no token is saved, stacks that might belong to it
 | Install minor updates automatically | On | While off, minor updates of containers are suggestions. |
 | Update Patchday automatically | On | Checks once a day, downloads in the background and installs when you close Patchday. |
 
-The switches and the **Never update** list are on the **Schedule** page. **Settings** in the sidebar holds the Portainer connection and, on Windows, the admin access.
+Day and time are on **Overview**. Everything else is on the **Settings** page, along with the appearance, the Portainer connection and, on Windows, the admin access.
 | Never update | Empty | Names of images or packages to leave alone, separated by commas. |
 | Portainer address and token | Empty | Connects Portainer stacks. |
 
@@ -204,6 +206,7 @@ Inside that folder:
 - `settings.json`: your settings, including skipped versions.
 - `history.json`: the last 1000 installs, updates, removals and runs.
 - `reports/`: one file per run.
+- `logs/`: the log book behind **Export logs**, about 1 MB plus one older file.
 - `backups/`: stack files and database dumps, one folder per stack update. These may contain sensitive data. After each run, folders older than 30 days are removed, but the 10 newest always stay. Folders you add by hand are never touched.
 - `portainer.token`: your token, encrypted by the operating system.
 
@@ -217,7 +220,8 @@ To find updates, Patchday sends image names to Docker Hub and other public regis
 | The report says `Docker is not reachable` | Start Docker, then select **Check now** again. |
 | A stack shows `Portainer is not connected` | Add the address and token in **Settings**. |
 | A stack shows `not managed by Compose or Portainer` | Portainer is running and no token is saved, or the container was started without Compose. |
-| A package shows **Failed** | The line below it names the cause, for example `app is running, close it`. **Show details** has the tool's own message. |
+| A package shows **Failed** | The line below it names the cause, for example `app is running, close it`. **Show details** has the tool's own message, and **Export logs** on **History** collects it for every update. |
+| `download did not match its checksum` | Patchday has already cleared the download, refreshed the sources and installed fresh. If it still fails, the publisher's file differs from what the package manager expects; checks are never skipped. Try again later. |
 | On macOS, a cask shows `needs your admin password` | Patchday does not store your password. Run `brew upgrade --cask <name>` once in the terminal. |
 | A stack shows **Failed** after a rollback | Restore the stack from the backup path shown in the report. |
 | A scheduled run did not start | The computer must be awake and you must be logged in. |

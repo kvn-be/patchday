@@ -89,10 +89,18 @@
     root.appendChild(list);
 
     var index = Math.max(0, indexOf(opt.value));
-    var frame = 0, settle = 0, lastSent = index;
+    var frame = 0, settle = 0, lastSent = index, placed = false;
     function indexOf(value) { for (var i = 0; i < items.length; i++) if (items[i].value === value) return i; return -1; }
+    // A wheel mounted inside a hidden page has no height yet; it takes its place once it shows.
+    function place() {
+      if (!list.clientHeight) return;
+      list.scrollTop = index * ROW;
+      placed = true;
+      paint();
+    }
     function paint() {
       frame = 0;
+      if (!placed) return;
       var center = list.scrollTop / ROW;
       nodes.forEach(function (node, i) {
         var d = i - center, far = Math.min(Math.abs(d), 3);
@@ -108,6 +116,7 @@
     }
     function commit() {
       settle = 0;
+      if (!placed) return;
       // Snap exactly onto the row, then report once.
       if (Math.abs(list.scrollTop - index * ROW) > 1) list.scrollTo({ top: index * ROW, behavior: still ? 'auto' : 'smooth' });
       if (index !== lastSent) { lastSent = index; if (opt.onChange) opt.onChange(items[index].value); }
@@ -115,11 +124,13 @@
     function go(i, animate) {
       index = Math.max(0, Math.min(items.length - 1, i));
       mark();
+      if (!placed) return;
       list.scrollTo({ top: index * ROW, behavior: animate && !still ? 'smooth' : 'auto' });
       clearTimeout(settle);
       settle = setTimeout(commit, animate && !still ? 380 : 0);
     }
     list.addEventListener('scroll', function () {
+      if (!placed) return;
       if (!frame) frame = requestAnimationFrame(paint);
       clearTimeout(settle);
       settle = setTimeout(commit, 140);
@@ -131,7 +142,8 @@
       else if (event.key === 'End') { event.preventDefault(); go(items.length - 1, true); }
     });
     mark();
-    requestAnimationFrame(function () { list.scrollTop = index * ROW; paint(); });
+    if (window.ResizeObserver) new ResizeObserver(function () { if (!placed || !settle) place(); }).observe(list);
+    requestAnimationFrame(place);
     return {
       set: function (value, animate) { var i = indexOf(value); if (i >= 0 && i !== index) { lastSent = i; go(i, animate); } },
       get: function () { return items[index] ? items[index].value : undefined; },

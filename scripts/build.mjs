@@ -33,3 +33,6 @@ await Promise.all([
 ]);
 await copyFile('src/renderer/index.html', 'dist/renderer/index.html');
 await copyFile('design/system/project/components/bundle.js', 'dist/renderer/bundle.js');
+// Menu bar and tray icons.
+await mkdir('dist/renderer/tray', { recursive: true });
+for (const name of ['trayTemplate.png', 'trayTemplate@2x.png', 'tray.png']) await copyFile(`build/tray/${name}`, `dist/renderer/tray/${name}`);

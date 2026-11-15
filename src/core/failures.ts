@@ -124,3 +124,15 @@ export function diagnoseElevated(code: number, output: string): Diagnosis {
   if (ELEVATION_CANCELLED.test(output)) return { reason: 'the admin prompt was cancelled', final: true };
   return diagnoseChoco(code, output);
 }
+
+// pip, npm, .NET tools, PowerShell modules, Cargo and vcpkg: the common causes, in plain words.
+export function diagnoseExtra(manager: 'pip' | 'npm' | 'dotnet' | 'pwsh' | 'winps' | 'cargo' | 'vcpkg', output: string): Diagnosis {
+  if (ELEVATION_CANCELLED.test(output)) return { reason: 'the admin prompt was cancelled', final: true };
+  if (/externally-managed-environment/i.test(output)) return { reason: 'this Python is managed by the system; use pipx or a virtual environment, or set the scope to user', final: true };
+  if (/EACCES|permission denied|Access to the path .* is denied|Administrator rights are required|requires elevation/i.test(output)) return { reason: 'missing rights; try again as administrator', final: true };
+  if (/already installed|is already up to date|Requirement already satisfied|already has the latest|up-to-date|No packages need updating/i.test(output)) return { reason: 'already up to date', applied: true };
+  if (/No matching distribution|404 Not Found|could not find|No match was found|is not found in|could not be found|Unable to find package|does not exist in the vcpkg/i.test(output)) return { reason: `${manager} does not know this package`, final: true };
+  if (/being used by another process|EBUSY|resource busy/i.test(output)) return { reason: 'a program still uses it, close it', fix: 'wait-retry' };
+  if (/ETIMEDOUT|ECONNRESET|network|timed out|Could not resolve host|Temporary failure in name resolution/i.test(output)) return { reason: 'the download failed', fix: 'refresh-retry' };
+  return { reason: `${manager} stopped with an error` };
+}

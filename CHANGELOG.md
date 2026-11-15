@@ -2,7 +2,25 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
-## Unreleased
+## 2.0.0 - 2026-11-16
+
+### Added
+
+- Seven more package managers: pip, npm, .NET tools, PowerShell 7, Windows PowerShell, Cargo and vcpkg, next to Homebrew, winget, Chocolatey and Scoop.
+- **Packages** has the tabs **Installed**, **Updates** and **Discover**, a filter per package manager, sorting, and a bar for everything selected: install, update, remove, ignore updates, add to bundle.
+- Package details: description, publisher, homepage, license, release notes, installer and installable versions.
+- Install options per package, in UniGetUI's keys: version, scope, architecture, install location, extra arguments, commands before and after, show installer, run as administrator, pre-releases, skip checksum, skip major or minor updates, update automatically, remove app data, remove before updating, programs to close first.
+- **Bundles**: open, build, edit, save and install package bundles in UniGetUI's `.ubundle` format (version 3). Old UniGetUI bundles in JSON, YAML and XML and Patchday 1.x package lists open too. Every import shows a security report first.
+- **Queue**: operations wait their turn, can be cancelled or tried again, and show the tool's output. Different package managers can run side by side (Settings, up to 4).
+- Sources: add and remove Homebrew taps, Scoop buckets, winget and Chocolatey sources and PowerShell repositories.
+- Settings for package managers (on/off, own program path), security (custom arguments, commands, skipping checksums, what imports may keep; all off by default), background (menu bar or tray icon, start at login, a package check once a day, notifications, automatic package updates, icons) and backups (on by default: a daily bundle in Documents/Patchday backups, optional secret GitHub Gist, restore).
+- Package icons from UniGetUI's public icon list.
+- Skipped versions can be allowed again in Settings.
+- Scheduled runs and **Check now** include pip, npm, .NET tools, PowerShell modules, Cargo and vcpkg with the same rules as apps: patch and minor updates install by themselves, major updates, pre-releases and the hold list wait, skipped versions and a package's own skip options stay out. Scheduled runs never skip a checksum.
+
+### Removed
+
+- **Export list** and **Import list**; bundles replace them and still read old lists.
 
 ### Changed
 

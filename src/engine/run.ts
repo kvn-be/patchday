@@ -6,7 +6,10 @@ import { diagnoseBrew, diagnoseChoco, diagnoseScoop, diagnoseWinget, type Diagno
 import { decide, MINOR_WITHOUT_NOTES, OPTIONAL_MINOR, protectedCategory, type Decision } from '../core/policy.ts';
 import { isPrerelease, latestTag } from '../core/version.ts';
 import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
-import { isSkipped, parseScoopStatus, repairPlan, scoopCommand, WINGET_FLAGS, wingetTarget, type Package } from '../core/packages.ts';
+import { EXTRA_MANAGERS, isExtra, isSkipped, managersFor, packageKey, parseScoopStatus, repairPlan, scoopCommand, WINGET_FLAGS, wingetTarget, type Package } from '../core/packages.ts';
+import type { ExtraManager } from '../core/extra.ts';
+import { skipsUpdate } from '../core/options.ts';
+import { listInstalled, operate, type PackageDeps } from './packages.ts';
 import { installWithRepair as repairLadder, lastLines, runSequence } from './repair.ts';
 import type { PortainerClient, PortainerStack } from './portainer.ts';
 import type { AdvisoryLookup, ReleaseNotesLookup } from './releases.ts';
@@ -29,6 +32,8 @@ export interface Deps {
   now(): Date;
   log(message: string): void;
   onProgress?(items: ProgressItem[]): void;
+  // Public registries for pip, .NET tools and Cargo versions. Without it those managers show no updates.
+  fetchText?(url: string): Promise<string | null>;
 }
 
 interface ImagePlan {
@@ -506,6 +511,55 @@ async function applyScoop(deps: Deps, tracker: Tracker, open: ScoopUpdate[]): Pr
   });
 }
 
+// ---------- pip, npm, .NET tools, PowerShell modules, Cargo, vcpkg ----------
+
+const EXTRA_NAMES: Record<ExtraManager, string> = { pip: 'pip', npm: 'npm', dotnet: '.NET tool', pwsh: 'PowerShell', winps: 'PowerShell', cargo: 'Cargo', vcpkg: 'vcpkg' };
+const majorOf = (version: string) => /^v?(\d+)/.exec(version)?.[1];
+
+function packageDeps(deps: Deps, settings: Settings): PackageDeps {
+  return { exec: deps.exec, platform: deps.platform, sleep: deps.sleep, fetchText: deps.fetchText, executables: settings.managerPaths ?? {}, disabled: settings.disabledManagers ?? [] };
+}
+
+// Same rules as for apps: patch and minor updates install by themselves, majors and pre-releases wait,
+// the hold list waits, skipped versions and updates the package's own options skip stay out.
+export async function listExtras(deps: Deps, settings: Settings): Promise<{ open: Package[]; waiting: ReportItem[] }> {
+  const managers = EXTRA_MANAGERS.filter((manager) => managersFor(deps.platform).includes(manager));
+  const inventory = await listInstalled(packageDeps(deps, settings), managers);
+  const open: Package[] = [];
+  const waiting: ReportItem[] = [];
+  for (const entry of inventory.packages) {
+    if (!entry.available || !isExtra(entry.manager)) continue;
+    if (isSkipped(settings.skipped, entry, entry.available)) continue;
+    if (skipsUpdate(settings.packageOptions?.[packageKey(entry)] ?? {}, entry.version, entry.available)) continue;
+    const item = (reason: string) => packageItem(entry.manager as ExtraManager, entry.name, entry.version, entry.available as string, 'waiting', reason, undefined, entry.id);
+    if (settings.holds.includes(entry.id) || settings.holds.includes(entry.name)) waiting.push(item('on hold list'));
+    else if (betaFor(entry.version, entry.available)) waiting.push(item('prerelease'));
+    else if (majorOf(entry.version) !== majorOf(entry.available)) waiting.push(item('major update'));
+    else open.push(entry);
+  }
+  return { open, waiting };
+}
+
+async function applyExtras(deps: Deps, tracker: Tracker, open: Package[], settings: Settings): Promise<ReportItem[]> {
+  const items: ReportItem[] = [];
+  for (const entry of open) {
+    const source = entry.manager as ExtraManager;
+    tracker.step(source, entry.name, 'update', null);
+    // Scheduled runs never skip a checksum, whatever the package's options say.
+    const result = await operate(packageDeps(deps, settings), 'update', entry, {
+      options: settings.packageOptions?.[packageKey(entry)] ?? {},
+      policy: { allowParameters: settings.allowParameters ?? false, allowSkipHash: false },
+      allowCommands: settings.allowCommands ?? false,
+      log: deps.log,
+      onPhase: (phase) => tracker.step(source, entry.name, (phase === 'retry' || phase === 'reinstall' ? phase : 'update') as Phase, null),
+    });
+    const reason = result.ok ? result.reason || `${EXTRA_NAMES[source]} update` : result.reason;
+    tracker.finish(source, entry.name, result.ok, reason);
+    items.push(packageItem(source, entry.name, entry.version, entry.available as string, result.ok ? 'applied' : 'failed', reason, result.ok ? undefined : result.detail, entry.id));
+  }
+  return items;
+}
+
 export function summarize(items: ReportItem[]): Report['status'] {
   if (items.some((item) => item.outcome === 'failed' || item.outcome === 'rolled-back')) return 'error';
   return items.some((item) => item.outcome === 'waiting') ? 'warning' : 'ok';
@@ -538,6 +592,8 @@ function packagePreview(
     ...(scoopApps?.open ?? []).map((entry) => packageItem('scoop', entry.id, entry.installed, entry.available, 'planned', 'Scoop update')),
   ];
 }
+
+const extraPlanned = (entry: Package) => packageItem(entry.manager as ExtraManager, entry.name, entry.version, entry.available as string, 'planned', `${EXTRA_NAMES[entry.manager as ExtraManager]} update`, undefined, entry.id);
 
 export interface RunOptions {
   // "Update now": only these containers ("repository:tag") run; packages and other containers are left alone.
@@ -587,6 +643,13 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode'], 
   let winget: WingetPackage[] = [];
   let choco: Awaited<ReturnType<typeof listChoco>> = null;
   let scoopApps: Awaited<ReturnType<typeof listScoop>> = null;
+  let extras: Awaited<ReturnType<typeof listExtras>> = { open: [], waiting: [] };
+  try {
+    extras = await listExtras(deps, settings);
+    items.push(...extras.waiting);
+  } catch (error) {
+    notes.push(`Developer packages: ${(error as Error).message}`);
+  }
   try {
     if (deps.platform === 'darwin' || deps.platform === 'linux') brew = await listBrew(deps, settings, apply && !selected);
     if (deps.platform === 'win32') {
@@ -610,13 +673,14 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode'], 
     if (selected) {
       // Packages are not touched by "Update now"; they stay planned for the next run.
       items.push(...(await applyChosen(deps, tracker, auto, stacks, notes)));
-      return { startedAt, finishedAt: deps.now().toISOString(), mode, status: summarize(items), items: [...items, ...packagePreview(brew, choco, winget, scoopApps)], notes };
+      return { startedAt, finishedAt: deps.now().toISOString(), mode, status: summarize(items), items: [...items, ...packagePreview(brew, choco, winget, scoopApps), ...extras.open.map(extraPlanned)], notes };
     }
     for (const plan of auto) items.push({ source: 'docker', name: plan.containers[0].name, from: plan.from, to: plan.to, outcome: 'planned', reason: plan.decision.reason });
     for (const entry of brew?.open ?? []) items.push(packageItem('brew', entry.name, entry.installed, entry.available, 'planned', 'Homebrew update'));
     for (const entry of choco?.open ?? []) items.push(packageItem('choco', entry.name, entry.installed, entry.available, 'planned', 'Chocolatey update'));
     for (const entry of winget) items.push(packageItem('winget', entry.name, entry.installed, entry.available, 'planned', 'winget update'));
     for (const entry of scoopApps?.open ?? []) items.push(packageItem('scoop', entry.id, entry.installed, entry.available, 'planned', 'Scoop update'));
+    items.push(...extras.open.map(extraPlanned));
     return { startedAt, finishedAt: deps.now().toISOString(), mode, status: summarize(items), items, notes };
   }
 
@@ -626,6 +690,7 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode'], 
     ...(choco?.open ?? []).map((entry) => ({ source: 'choco' as const, name: entry.name, from: entry.installed, to: entry.available })),
     ...winget.map((entry) => ({ source: 'winget' as const, name: entry.name, from: entry.installed, to: entry.available })),
     ...(scoopApps?.open ?? []).map((entry) => ({ source: 'scoop' as const, name: entry.id, from: entry.installed, to: entry.available })),
+    ...extras.open.map((entry) => ({ source: entry.manager as ExtraManager, name: entry.name, from: entry.version, to: entry.available as string })),
   ]);
 
   try {
@@ -645,6 +710,7 @@ export async function run(deps: Deps, settings: Settings, mode: Report['mode'], 
     if (choco) items.push(...(await applyChoco(deps, tracker, choco.open, settings)));
     if (winget.length > 0) items.push(...(await applyWinget(deps, tracker, winget, settings)));
     if (scoopApps && scoopApps.open.length > 0) items.push(...(await applyScoop(deps, tracker, scoopApps.open)));
+    if (extras.open.length > 0) items.push(...(await applyExtras(deps, tracker, extras.open, settings)));
   } catch (error) {
     notes.push(`Packages: ${(error as Error).message}`);
   }

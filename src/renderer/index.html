@@ -57,15 +57,17 @@
     <section class="page" id="page-overview" aria-labelledby="overview-title">
       <header class="pd-page-head">
         <div><h1 id="overview-title" data-i18n="navOverview"></h1><p data-i18n="overviewLead"></p></div>
-        <button class="pd-btn pd-btn-line" type="button" data-action="check" data-i18n="check"></button>
-        <button class="pd-btn pd-btn-main" type="button" data-action="update" data-i18n="updateAll"></button>
+        <div class="pd-toolbar pd-glass">
+          <button class="pd-btn pd-btn-line" type="button" data-action="check" data-i18n="check"></button>
+          <button class="pd-btn pd-btn-main" type="button" data-action="update" data-i18n="updateAll"></button>
+        </div>
       </header>
-      <div class="self-update pd-glass" id="self-update" role="status" hidden>
+      <div class="self-update pd-surface" id="self-update" role="status" hidden>
         <p id="self-text"></p>
         <div class="pd-progress" id="self-bar" role="progressbar" hidden><span></span></div>
         <div><button class="pd-btn pd-btn-line pd-btn-small" id="self-restart" type="button" data-i18n="selfRestart" hidden></button></div>
       </div>
-      <section class="hero pd-glass" aria-live="polite">
+      <section class="hero pd-surface" aria-live="polite">
         <div class="hero-text">
           <span class="pd-pill pd-pill-wait" id="hero-when"></span>
           <h2 id="hero-title"></h2>
@@ -85,13 +87,13 @@
         </div>
       </section>
       <div class="cards">
-        <section class="card pd-glass">
+        <section class="card pd-surface">
           <h3 data-i18n="lastRun"></h3>
           <p class="big" id="card-last"></p>
           <div class="pills" id="card-last-pills"></div>
           <button class="pd-link" type="button" data-goto="updates" data-i18n="seeReport"></button>
         </section>
-        <section class="card pd-glass">
+        <section class="card pd-surface">
           <h3 data-i18n="waitsForYou"></h3>
           <p class="big" id="card-wait"></p>
           <p class="muted" id="card-wait-text"></p>
@@ -103,11 +105,13 @@
     <section class="page" id="page-updates" aria-labelledby="updates-title" hidden>
       <header class="pd-page-head">
         <div><h1 id="updates-title" data-i18n="navUpdates"></h1><p id="updates-lead"></p></div>
-        <button class="pd-btn pd-btn-line" type="button" data-action="check" data-i18n="check"></button>
-        <button class="pd-btn pd-btn-main" type="button" data-action="update" data-i18n="updateAll"></button>
+        <div class="pd-toolbar pd-glass">
+          <button class="pd-btn pd-btn-line" type="button" data-action="check" data-i18n="check"></button>
+          <button class="pd-btn pd-btn-main" type="button" data-action="update" data-i18n="updateAll"></button>
+        </div>
       </header>
       <p class="muted progress" id="progress" role="status"></p>
-      <div class="panel pd-glass" id="report"></div>
+      <div class="panel pd-surface"><div class="panel-scroll pd-scroll-edge" id="report"></div></div>
     </section>
 
     <section class="page" id="page-packages" aria-labelledby="packages-title" hidden></section>
@@ -117,7 +121,7 @@
         <div><h1 id="settings-title" data-i18n="settings"></h1><p data-i18n="settingsLead"></p></div>
       </header>
       <div class="settings-grid">
-        <section class="pd-glass settings-card">
+        <section class="pd-surface settings-card">
           <h2 data-i18n="whatHappens"></h2>
           <div class="set"><span data-i18n="enabled"></span><button class="pd-switch" type="button" role="switch" id="enabled" aria-checked="false"><span></span></button><small data-i18n="enabledHint"></small></div>
           <div class="set"><span data-i18n="applyLabel"></span><button class="pd-switch" type="button" role="switch" id="apply" aria-checked="false"><span></span></button><small data-i18n="applyHint"></small></div>
@@ -130,7 +134,7 @@
           </div>
         </section>
         <div class="settings-side">
-          <section class="pd-glass settings-card">
+          <section class="pd-surface settings-card">
             <h2 data-i18n="appearance"></h2>
             <div class="set set-wide">
               <div class="pd-segmented" role="group" data-i18n-aria="appearance" id="appearance">
@@ -141,7 +145,7 @@
               <small data-i18n="appearanceHint"></small>
             </div>
           </section>
-          <section class="pd-glass settings-card">
+          <section class="pd-surface settings-card">
             <h2>Portainer</h2>
             <div class="set set-wide settings-body">
               <label class="pd-field"><span data-i18n="portainerUrl"></span><input id="portainer-url" type="url" placeholder="https://127.0.0.1:9443" autocomplete="off" spellcheck="false"></label>
@@ -151,7 +155,7 @@
             </div>
             <div class="set set-wide admin-row" id="admin-row" hidden><small id="admin-state"></small><div><button class="pd-btn pd-btn-line pd-btn-small" id="admin-setup" type="button" data-i18n="adminAllow"></button></div></div>
           </section>
-          <section class="pd-glass settings-card" id="sudo-card" hidden>
+          <section class="pd-surface settings-card" id="sudo-card" hidden>
             <h2 data-i18n="sudoTitle"></h2>
             <div class="set set-wide settings-body">
               <small data-i18n="sudoHint"></small>

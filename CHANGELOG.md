@@ -2,6 +2,17 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## Unreleased
+
+### Changed
+
+- Liquid Glass, done the Apple way: only the function layer is glass (sidebar, page toolbars, schedule wheels, search, dialogs). Status panel, cards, lists and settings now sit on calm surfaces, so content and controls are easy to tell apart and no glass sits on glass.
+- Glass has a rim light, a counter edge and a lens glow. Buttons are glass too: the main action is tinted glass, the others clear glass.
+- **Check now** and **Update all** (and the page actions on Packages and History) are grouped in one toolbar capsule at the top right.
+- Lists fade at their top and bottom edges while scrolling.
+- The chosen sidebar item and segment are glass lenses; a switch knob turns into glass while pressed. Sidebar corners are concentric; dialogs have a larger radius.
+- With **Reduce transparency** glass turns solid, with **Increase contrast** glass and surfaces get clear edges.
+
 ## 1.5.0 - 2026-11-14
 
 ### Added

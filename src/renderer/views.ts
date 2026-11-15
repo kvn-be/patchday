@@ -199,7 +199,9 @@ export function createViews(ctx: ViewContext) {
       renderList();
     }, false);
     exportButton.id = 'export-button';
-    head.append(titles, importButton, exportButton);
+    const tools = element('div', 'pd-toolbar pd-glass');
+    tools.append(importButton, exportButton);
+    head.append(titles, tools);
 
     const search = element('label', 'search pd-glass');
     search.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>';
@@ -235,9 +237,11 @@ export function createViews(ctx: ViewContext) {
     const line = element('p', 'muted progress');
     line.id = 'package-status';
     line.setAttribute('role', 'status');
-    const panel = element('div', 'panel pd-glass');
+    const frame = element('div', 'panel pd-surface');
+    const panel = element('div', 'panel-scroll pd-scroll-edge');
     panel.id = 'package-list';
-    page.append(head, search, filter, line, panel);
+    frame.append(panel);
+    page.append(head, search, filter, line, frame);
     renderList();
   }
 
@@ -347,10 +351,14 @@ export function createViews(ctx: ViewContext) {
         renderHistory();
       }
     }, false);
-    head.append(titles, runLogsButton, exportButton);
+    const tools = element('div', 'pd-toolbar pd-glass');
+    tools.append(runLogsButton, exportButton);
+    head.append(titles, tools);
     const line = element('p', 'muted progress', historyStatus);
     line.setAttribute('role', 'status');
-    const panel = element('div', 'panel pd-glass');
+    const frame = element('div', 'panel pd-surface');
+    const panel = element('div', 'panel-scroll pd-scroll-edge');
+    frame.append(panel);
     if (history.length === 0) panel.append(element('div', 'notes', t().historyEmpty));
     for (const entry of history) {
       const when = new Date(entry.at).toLocaleString(t().locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -365,7 +373,7 @@ export function createViews(ctx: ViewContext) {
       }
       panel.append(node);
     }
-    page.append(head, line, panel);
+    page.append(head, line, frame);
   }
 
   return {

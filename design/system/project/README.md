@@ -31,9 +31,14 @@ Use 24-hour time in both languages. Write versions as `3.4.0 → 3.4.1`. Keep pr
 ## Color and material
 
 - Two themes, light and dark Liquid Glass, chosen in Settings: system, light or dark. Every colour is a token with both values; components never hard-code a surface colour.
-- The page is `ground` with the four blurred shapes of `Ground`. Content always sits on `Glass`: `glass` fill, 30px blur, `glass-edge`, `shadow-glass`.
+- The page is `ground` with the four blurred shapes of `Ground`.
+- Two layers, kept apart. **Content** (status panel, cards, lists, settings) sits on `Surface`: `surface` fill, 12px blur, `surface-edge`, `shadow-surface`, no rim. **The function layer** (sidebar, page toolbars, the schedule wheels, search, dialogs) is `Glass`, Liquid Glass after Apple: gradient `glass-top` to `glass`, 22px blur with 190% saturation, 0.5px `glass-edge`, `shadow-glass` (rim light `rim` top left, counter edge and lens glow `rim-soft`, floating shadow).
+- Never glass on glass: a glass control may sit on a surface, not on other glass.
+- Page actions are grouped in one `Toolbar` capsule at the top right. Text buttons only; icons would get a capsule of their own.
+- Scrolling lists fade at their edges (`pd-scroll-edge`) so the controls above stay legible.
 - Text is `ink`, secondary text `ink-2`, small notes `ink-3`. All pass 4.5:1 on the lightest glass.
-- Actions are solid: `ink` with `on-ink` for main, `glass-strong` with `control-edge` for secondary. Never a glass button. In the dark theme `ink` turns light, so the main button becomes a light pill.
+- Buttons are glass. The one main action per place is prominent glass, tinted with `tint` and `on-tint` text; every other action is clear glass with a rim. In the dark theme `tint` turns light, so the main button becomes a light pill. The chosen sidebar item and segment are glass lenses.
+- Accessibility: with `prefers-reduced-transparency` glass turns solid and edges stop fading; with `prefers-contrast: more` every glass and surface gets an `ink-3` edge.
 - `brass` is the only ornament: the logo, the dial hand and the focus ring. `coffee` fills the coffee button and nothing else.
 - `ok`, `wait` and `back` mean status only, always with a word. A good-time hint uses `ok`, a daytime warning `back`.
 
@@ -48,12 +53,12 @@ Use 24-hour time in both languages. Write versions as `3.4.0 → 3.4.1`. Keep pr
 
 - The app window keeps 16:9, from 960 x 540 to 1920 x 1080. Lay it out once for 1280 x 720; the page zooms with the window.
 - Sidebar 248px, 28px gap, content to the right. Only panels scroll, never the page.
-- Radii by place: `radius-full` for controls, `radius-control` for sidebar items, `radius-field` for fields and row icons, `radius-panel` for panels and cards, `radius-hero` for the Overview status and the schedule panels.
+- Radii by place, concentric: `radius-full` for controls, toolbars and search, `radius-control` for sidebar items (sidebar 26px minus its 12px padding), `radius-field` for fields and row icons, `radius-panel` for panels and cards, `radius-hero` for the Overview status and the schedule panels, `radius-sheet` for dialogs.
 
 ## Motion
 
 - The ground drifts against the pointer at four depths, up to 36px, 1.1 seconds ease-out. Nothing sits on the pointer itself, and glass never moves.
-- Buttons lift 1px on hover and give to 0.97 on press. Switches slide in 0.2 seconds.
+- Buttons lift 1px on hover and give to 0.97 on press. Switches slide with a soft spring; while pressed the knob widens into a glass lens.
 - Wheels glide to a row and snap; neighbours tilt away and fade.
 - `Steps` pop each reached hub and draw its ring; the running phase fills its bar slowly.
 - Respect `prefers-reduced-motion`: the ground stays still, buttons do not move, and the end state shows at once.

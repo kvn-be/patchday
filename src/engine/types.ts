@@ -1,7 +1,7 @@
 import type { InstallOptions } from '../core/options.ts';
 import type { Manager } from '../core/packages.ts';
 export type Outcome = 'planned' | 'applied' | 'waiting' | 'rolled-back' | 'failed';
-export type ItemSource = 'docker' | 'brew' | 'winget' | 'choco' | 'scoop';
+export type ItemSource = 'docker' | 'brew' | 'winget' | 'choco' | 'scoop' | 'pip' | 'npm' | 'dotnet' | 'pwsh' | 'winps' | 'cargo' | 'vcpkg';
 
 export interface ReportItem {
   source: ItemSource;

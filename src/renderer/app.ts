@@ -69,7 +69,7 @@ const t = () => STRINGS[settings.language as Language];
 const language = () => settings.language as Language;
 const report = () => reports[0] ?? null;
 
-const SOURCE: Record<ReportItem['source'], string> = { docker: 'Container', brew: 'Homebrew', winget: 'winget', choco: 'Chocolatey', scoop: 'Scoop' };
+const SOURCE: Record<ReportItem['source'], string> = { docker: 'Container', brew: 'Homebrew', winget: 'winget', choco: 'Chocolatey', scoop: 'Scoop', pip: 'pip', npm: 'npm', dotnet: '.NET Tool', pwsh: 'PowerShell 7', winps: 'Windows PowerShell', cargo: 'Cargo', vcpkg: 'vcpkg' };
 const PILL: Record<ReportItem['outcome'], [string, keyof typeof STRINGS.en]> = {
   planned: ['plain', 'bPlanned'],
   applied: ['ok', 'bApplied'],

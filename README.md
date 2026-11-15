@@ -143,6 +143,7 @@ Patchday uses fixed rules and no AI. A container only updates automatically if e
 | --- | --- | --- |
 | Patch updates of healthy containers | Major updates | Delete volumes or databases |
 | Homebrew, winget, Chocolatey and Scoop packages | Databases and caches | `docker system prune` |
+| Patch and minor updates of pip, npm, .NET, PowerShell, Cargo and vcpkg packages | Their major updates and pre-releases | Skip a checksum in a scheduled run |
 | Minor updates with release notes that show no breaking changes (see [Known limits](#known-limits)) | Network and DNS services such as `cloudflared` | Change a stack behind Portainer's back |
 | | Portainer itself, locally built images, prerelease tags | |
 | | Unhealthy containers and images without a build for your CPU | |
@@ -294,7 +295,6 @@ scripts/      Build script
 - Homebrew, winget, Chocolatey and Scoop report no percentage, so their bars show activity until a package is finished.
 - Scoop and the **Packages** page on Windows have had little real-world testing.
 - pip cannot search, because PyPI has no search API; it finds exact project names only.
-- pip, npm, .NET tools, PowerShell modules, Cargo and vcpkg are not part of scheduled runs. Their updates install from **Packages**, from the tray, or automatically through **Update all packages automatically**.
 - The new package managers, bundles and the tray have had little real-world testing on Windows.
 - With the admin task set up, scheduled runs also update Scoop apps with admin rights. Scoop warns about that but works.
 - Some installers refuse to run as administrator. They show that as the reason.

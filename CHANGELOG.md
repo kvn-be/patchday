@@ -2,7 +2,7 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
-## Unreleased
+## 2.0.0 - 2026-11-16
 
 ### Added
 
@@ -16,6 +16,7 @@ All notable changes to Patchday are listed here. Versions follow [semantic versi
 - Settings for package managers (on/off, own program path), security (custom arguments, commands, skipping checksums, what imports may keep; all off by default), background (menu bar or tray icon, start at login, a package check once a day, notifications, automatic package updates, icons) and backups (on by default: a daily bundle in Documents/Patchday backups, optional secret GitHub Gist, restore).
 - Package icons from UniGetUI's public icon list.
 - Skipped versions can be allowed again in Settings.
+- Scheduled runs and **Check now** include pip, npm, .NET tools, PowerShell modules, Cargo and vcpkg with the same rules as apps: patch and minor updates install by themselves, major updates, pre-releases and the hold list wait, skipped versions and a package's own skip options stay out. Scheduled runs never skip a checksum.
 
 ### Removed
 

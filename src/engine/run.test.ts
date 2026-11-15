@@ -160,6 +160,8 @@ test('parseWingetUpgrade cuts columns at the header', () => {
   assert.deepEqual(parseWingetUpgrade(output), [{ name: 'Mozilla Firefox', id: 'Mozilla.Firefox', installed: '130.0', available: '131.0' }]);
 });
 
+const DEV_TOOLS = ['python', 'python3', 'npm', 'dotnet', 'pwsh', 'cargo', 'vcpkg'];
+
 function packageHarness(platform: NodeJS.Platform, script: (command: string, args: string[], calls: number) => { code: number; stdout?: string; stderr?: string } | null) {
   let clock = 0;
   const commands: string[][] = [];
@@ -168,6 +170,8 @@ function packageHarness(platform: NodeJS.Platform, script: (command: string, arg
     exec: async (command, args) => {
       commands.push([command, ...args]);
       if (command === 'docker') return { code: 1, stdout: '', stderr: '' };
+      // Developer package managers are not installed here; they have tests of their own.
+      if (DEV_TOOLS.includes(command) || (command === 'powershell' && /npm|PSVersionTable/.test(Buffer.from(String(args.at(-1)), 'base64').toString('utf16le')))) return { code: 1, stdout: '', stderr: '' };
       const calls = commands.filter((entry) => entry.join(' ') === [command, ...args].join(' ')).length;
       return { stdout: '', stderr: '', ...(script(command, args, calls) ?? { code: 0 }) };
     },
@@ -410,4 +414,32 @@ test('winget: a per-user install in an admin run is reported for the retry and k
   assert.equal(fox.outcome, 'failed');
   assert.equal(fox.reason, 'installed for your user only');
   assert.equal(fox.id, 'Fox.F');
+});
+
+test('developer packages: patch and minor updates run, majors, betas and holds wait, skipped stay out', async () => {
+  const pipList = JSON.stringify([{ name: 'black', version: '24.8.0' }, { name: 'requests', version: '2.31.0' }, { name: 'rich', version: '13.0.0' }, { name: 'held', version: '1.0.0' }, { name: 'nope', version: '1.0.0' }]);
+  const pipOutdated = JSON.stringify([
+    { name: 'black', latest_version: '24.10.0' }, { name: 'requests', latest_version: '3.0.0' }, { name: 'rich', latest_version: '13.1.0rc1' },
+    { name: 'held', latest_version: '1.0.1' }, { name: 'nope', latest_version: '1.0.1' },
+  ]);
+  const commands: string[] = [];
+  const deps: Deps = {
+    exec: async (command, args) => {
+      commands.push([command, ...args].join(' '));
+      if (command !== 'python3') return { code: 1, stdout: '', stderr: '' };
+      if (args.includes('--outdated')) return { code: 0, stdout: pipOutdated, stderr: '' };
+      if (args.includes('list')) return { code: 0, stdout: pipList, stderr: '' };
+      return { code: 0, stdout: '', stderr: '' };
+    },
+    tags: async () => [], portainer: null, platform: 'darwin', arch: 'arm64', backupDir: '/backup',
+    readFile: async () => '', writeFile: async () => {}, sleep: async () => {}, now: () => new Date(0), log: () => {},
+  };
+  const settings = { ...DEFAULT_SETTINGS, holds: ['held'], skipped: { 'pip:nope': '1.0.1' } };
+  const preview = await run(deps, settings, 'preview');
+  const pip = preview.items.filter((item) => item.source === 'pip').map((item) => `${item.name}:${item.outcome}:${item.reason}`);
+  assert.deepEqual(pip.sort(), ['black:planned:pip update', 'held:waiting:on hold list', 'requests:waiting:major update', 'rich:waiting:prerelease']);
+  const applied = await run(deps, settings, 'apply');
+  assert.ok(commands.some((command) => command.includes('pip install --upgrade') && command.endsWith(' black')));
+  assert.ok(!commands.some((command) => command.includes('install --upgrade') && command.endsWith(' requests')));
+  assert.equal(applied.items.find((item) => item.name === 'black')?.outcome, 'applied');
 });

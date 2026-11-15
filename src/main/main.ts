@@ -136,6 +136,7 @@ async function execute(mode: Report['mode'], onLog: (message: string) => void, o
       now: () => new Date(),
       log,
       onProgress,
+      fetchText,
       ...(sudo ? { sudoEnv: sudo.env } : {}),
     },
     settings,

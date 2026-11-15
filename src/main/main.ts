@@ -13,9 +13,10 @@ import { WORKER_FLAG } from '../core/elevation.ts';
 import { backupsToRemove } from '../core/retention.ts';
 import { addHistory, type HistoryEntry } from '../core/history.ts';
 import { formatLogs, formatRun, LOG_ROTATE_BYTES, runLogName, runLogsToRemove } from '../core/logs.ts';
-import { exportList, importList, isSafeId, MANAGERS, packageKey, WINGET_FLAGS, wingetTarget, type Manager, type Package, type PackageAction } from '../core/packages.ts';
+import { isSafeId, WINGET_FLAGS, wingetTarget, type Manager } from '../core/packages.ts';
 import { selfCheckDue } from '../core/selfupdate.ts';
-import { act, listInstalled, managersFor, search } from '../engine/packages.ts';
+import { managersFor, search } from '../engine/packages.ts';
+import { createHub, fetchText, sanitizeHubSettings, type Hub } from './hub.ts';
 import { DEFAULT_SETTINGS, migrateSettings, type ProgressItem, type Report, type Settings } from '../engine/types.ts';
 import { runWorker, runWorkerSelfUpdate, setupWorker, startWorkerSelfUpdate, workerReady, writeStatus } from './elevation.ts';
 import { ASKPASS_FLAG, ASKPASS_TOKEN_ENV, askpassScript, checkPassword, newSession, sessionAllows, type Session } from './askpass.ts';
@@ -200,19 +201,6 @@ function recordHistory(entries: HistoryEntry[]): Promise<unknown> {
   return historyQueue;
 }
 
-// Anything from the renderer is checked again here before it can reach a command.
-function cleanPackages(input: unknown): Package[] {
-  if (!Array.isArray(input)) return [];
-  const allowed = managersFor(process.platform);
-  return input.flatMap((raw) => {
-    const entry = raw as Partial<Package>;
-    const manager = entry.manager as Manager;
-    if (!MANAGERS.includes(manager) || !allowed.includes(manager) || typeof entry.id !== 'string' || !isSafeId(manager, entry.id)) return [];
-    if (entry.kind !== undefined && entry.kind !== 'formula' && entry.kind !== 'cask') return [];
-    return [{ manager, id: entry.id, name: typeof entry.name === 'string' ? entry.name.slice(0, 200) : entry.id, version: '', ...(entry.kind ? { kind: entry.kind } : {}) }];
-  });
-}
-
 // Keeps the backup folder from growing forever. A failed cleanup never fails the run.
 async function pruneBackups(onLog: (message: string) => void): Promise<void> {
   const names = await readdir(data('backups')).catch(() => []);
@@ -236,7 +224,7 @@ const DESIGN_HEIGHT = 720;
 const MIN_WIDTH = 960;
 const MAX_WIDTH = 1920;
 
-function createWindow(): BrowserWindow {
+function createWindow(show = true): BrowserWindow {
   const area = screen.getPrimaryDisplay().workAreaSize;
   const room = Math.floor(Math.min(area.width, ((area.height - 40) * DESIGN_WIDTH) / DESIGN_HEIGHT));
   const width = Math.max(MIN_WIDTH, Math.min(DESIGN_WIDTH, room));
@@ -248,6 +236,7 @@ function createWindow(): BrowserWindow {
     fullscreenable: false,
     backgroundColor: '#12142b',
     title: 'Patchday',
+    show,
     webPreferences: { preload: join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   window.setAspectRatio(DESIGN_WIDTH / DESIGN_HEIGHT);
@@ -264,10 +253,26 @@ function createWindow(): BrowserWindow {
   // Nothing inside the app may open other pages.
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
+  // With the menu bar / tray icon on, closing the window keeps Patchday running in the background.
+  window.on('close', (event) => {
+    if (quitting || !keepInTray) return;
+    event.preventDefault();
+    window.hide();
+  });
   return window;
 }
 
 let busy = false;
+let quitting = false;
+let keepInTray = false;
+let hub: Hub;
+
+function showWindow(): void {
+  const window = BrowserWindow.getAllWindows()[0] ?? createWindow();
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+}
 
 const validKeys = (keys: unknown): keys is string[] =>
   Array.isArray(keys) && keys.length > 0 && keys.length <= 200 && keys.every((key) => typeof key === 'string' && /^[\w./:@-]{1,300}$/.test(key));
@@ -285,6 +290,7 @@ function mergeForced(main: Report, extra: Report, forced: Set<string>): Report {
 function registerIpc(): void {
   const guarded = async (mode: Report['mode'], sender: Electron.WebContents, options: RunOptions = {}) => {
     if (busy) throw new Error('A run is already in progress');
+    if (mode === 'apply' && hub.queue.active) throw new Error('Package operations are still running; wait until the queue is empty');
     busy = true;
     try {
       const onItems = (items: ProgressItem[]) => sender.send('progress', items);
@@ -302,6 +308,7 @@ function registerIpc(): void {
       return await execute(mode, onLog, onItems, options);
     } finally {
       busy = false;
+      hub.queue.pump();
     }
   };
   ipcMain.handle('state', async () => ({
@@ -321,8 +328,10 @@ function registerIpc(): void {
   });
   ipcMain.handle('settings', async (_event, patch: Partial<Settings>) => {
     const previous = await loadSettings();
-    const settings = { ...previous, ...patch };
+    const settings = { ...previous, ...(await sanitizeHubSettings(patch)) };
     await saveFile(data('settings.json'), JSON.stringify(settings, null, 2));
+    keepInTray = settings.closeToTray;
+    await hub.settingsChanged(previous, settings);
     const scheduleChanged = previous.hourOfWeek !== settings.hourOfWeek || previous.scheduleEnabled !== settings.scheduleEnabled;
     // A development build must never leave a job behind on the machine.
     if (scheduleChanged && app.isPackaged) await syncSchedule(exec, settings.hourOfWeek, settings.scheduleEnabled, program());
@@ -357,29 +366,11 @@ function registerIpc(): void {
     await rm(data('admin.password'), { force: true });
   });
   ipcMain.handle('coffee', () => shell.openExternal(COFFEE_URL));
-  const deps = { exec, platform: process.platform };
-  ipcMain.handle('packages', () => listInstalled(deps));
-  ipcMain.handle('search', (_event, query: unknown, managers: unknown) => {
+  ipcMain.handle('search', async (_event, query: unknown, managers: unknown) => {
+    const settings = await loadSettings();
     const allowed = managersFor(process.platform);
     const chosen = Array.isArray(managers) ? allowed.filter((manager) => managers.includes(manager)) : allowed;
-    return search(deps, String(query ?? ''), chosen);
-  });
-  ipcMain.handle('package-action', async (event, action: unknown, input: unknown) => {
-    if (action !== 'install' && action !== 'uninstall' && action !== 'update') throw new Error('unknown action');
-    const packages = cleanPackages(input);
-    if (busy) throw new Error('A run is already in progress');
-    busy = true;
-    try {
-      const results = await act(deps, action as PackageAction, packages, (result, index) => event.sender.send('package-progress', { ...result, index, total: packages.length }));
-      packages.forEach((entry, index) => appendLog(`${action} ${entry.manager} ${entry.id}: ${results[index].ok ? 'done' : `failed: ${results[index].reason}`}`));
-      await recordHistory(packages.map((entry, index) => ({
-        at: new Date().toISOString(), action: action as PackageAction, manager: entry.manager, id: entry.id, name: entry.name,
-        ok: results[index].ok, ...(results[index].ok ? {} : { detail: [results[index].reason, results[index].detail].filter(Boolean).join('\n') }),
-      })));
-      return results;
-    } finally {
-      busy = false;
-    }
+    return search({ exec, platform: process.platform, fetchText, executables: settings.managerPaths, disabled: settings.disabledManagers }, String(query ?? ''), chosen);
   });
   ipcMain.handle('skip', async (_event, key: unknown, version: unknown) => {
     if (typeof key !== 'string' || typeof version !== 'string' || key.length > 300 || version.length > 100) throw new Error('invalid version');
@@ -406,27 +397,6 @@ function registerIpc(): void {
     if (problem) throw new Error(problem);
   });
   ipcMain.handle('history', async () => readFile(data('history.json'), 'utf8').then((text) => addHistory(JSON.parse(text), [])).catch(() => []));
-  ipcMain.handle('export', async (event, input: unknown) => {
-    const packages = cleanPackages(input);
-    const owner = BrowserWindow.fromWebContents(event.sender);
-    const options = { defaultPath: `patchday-packages-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'Patchday package list', extensions: ['json'] }] };
-    const choice = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options);
-    if (choice.canceled || !choice.filePath) return null;
-    await writeFile(choice.filePath, JSON.stringify(exportList(packages, new Date()), null, 2));
-    return packages.length;
-  });
-  ipcMain.handle('import', async (event) => {
-    const owner = BrowserWindow.fromWebContents(event.sender);
-    const options = { properties: ['openFile' as const], filters: [{ name: 'Patchday package list', extensions: ['json'] }] };
-    const choice = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
-    const path = choice.filePaths[0];
-    if (choice.canceled || !path) return null;
-    if ((await stat(path)).size > 2 * 1024 * 1024) throw new Error('the file is larger than 2 MB, so it is not a Patchday package list');
-    const result = importList(await readFile(path, 'utf8'));
-    // Lists from another system keep only what this system can install.
-    const usable = cleanPackages(result.packages);
-    return { packages: usable, skipped: result.skipped + result.packages.length - usable.length };
-  });
   ipcMain.handle('self-check', async () => {
     if (!app.isPackaged) return null;
     return (await findUpdate().catch(() => null))?.version ?? null;
@@ -493,6 +463,7 @@ function startAutoSelfUpdate(window: BrowserWindow): void {
 
 let installingOnQuit = false;
 app.on('before-quit', (event) => {
+  quitting = true;
   if (headless || installingOnQuit || (!stagedMac && !stagedWindows)) return;
   installingOnQuit = true;
   clearInterval(selfTimer);
@@ -561,15 +532,28 @@ async function runAsWorker(): Promise<void> {
 }
 
 if (!headless && !app.requestSingleInstanceLock()) app.quit();
+app.on('second-instance', () => { if (!headless) showWindow(); });
 
 app.whenReady().then(() => {
   if (askpass) return runAskpass();
   if (worker) return runAsWorker();
   if (scheduled) return runScheduled();
+  hub = createHub({
+    data, loadSettings, appendLog, recordHistory, showWindow,
+    saveSettings: (settings) => saveFile(data('settings.json'), JSON.stringify(settings, null, 2)),
+    runBusy: () => busy,
+    checkContainers: () => BrowserWindow.getAllWindows()[0]?.webContents.send('check-requested'),
+  });
   registerIpc();
-  startAutoSelfUpdate(createWindow());
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
-  return undefined;
+  hub.register();
+  return loadSettings().then((settings) => {
+    keepInTray = settings.closeToTray;
+    // Started at login: stay in the menu bar or tray until opened.
+    const hidden = process.argv.includes('--hidden') && keepInTray;
+    startAutoSelfUpdate(createWindow(!hidden));
+    void hub.startBackground();
+    app.on('activate', () => showWindow());
+  });
 });
 
 app.on('window-all-closed', () => { if (!headless) app.quit(); });

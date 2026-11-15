@@ -30,7 +30,7 @@ test('Windows inventory merges winget, Chocolatey and Scoop and skips missing ma
     if (decoded.includes("'status'")) return { stdout: SCOOP_STATUS };
     return null;
   });
-  const inventory = await listInstalled(deps);
+  const inventory = await listInstalled(deps, ['winget', 'choco', 'scoop']);
   assert.deepEqual(inventory.managers, ['winget', 'scoop']);
   assert.deepEqual(inventory.packages.map((entry) => `${entry.manager}:${entry.id}:${entry.version}>${entry.available ?? ''}`), [
     'winget:Git.Git:2.46.0>2.47.0',
@@ -41,7 +41,7 @@ test('Windows inventory merges winget, Chocolatey and Scoop and skips missing ma
 
 test('a broken manager is reported with a next step and the others still show', async () => {
   const { deps } = fake('darwin', (command, args) => (command === 'brew' && args[0] === 'info' ? { code: 1, stderr: 'Error: broken' } : null));
-  const inventory = await listInstalled(deps);
+  const inventory = await listInstalled(deps, ['brew']);
   assert.deepEqual(inventory.packages, []);
   assert.deepEqual(inventory.problems, ['Homebrew: brew info failed. Run it once in a terminal to see why, then refresh.']);
 });

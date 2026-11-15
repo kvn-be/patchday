@@ -1,7 +1,42 @@
 import { parseColumns, type Column } from './table.ts';
+import { isSafeExtraId, npmCommand, powershellScript, psQuote, pythonExecutable, type ExtraManager } from './extra.ts';
+import { optionArgs, type InstallOptions, type OptionPolicy } from './options.ts';
 
-export type Manager = 'brew' | 'winget' | 'choco' | 'scoop';
-export const MANAGERS: Manager[] = ['brew', 'winget', 'choco', 'scoop'];
+export type Manager = 'brew' | 'winget' | 'choco' | 'scoop' | ExtraManager;
+export const MANAGERS: Manager[] = ['brew', 'winget', 'choco', 'scoop', 'pip', 'npm', 'dotnet', 'pwsh', 'winps', 'cargo', 'vcpkg'];
+export const EXTRA_MANAGERS: ExtraManager[] = ['pip', 'npm', 'dotnet', 'pwsh', 'winps', 'cargo', 'vcpkg'];
+export const isExtra = (manager: Manager): manager is ExtraManager => (EXTRA_MANAGERS as Manager[]).includes(manager);
+
+export const MANAGER_NAMES: Record<Manager, string> = {
+  brew: 'Homebrew', winget: 'winget', choco: 'Chocolatey', scoop: 'Scoop', pip: 'pip', npm: 'npm',
+  dotnet: '.NET Tool', pwsh: 'PowerShell 7', winps: 'Windows PowerShell', cargo: 'Cargo', vcpkg: 'vcpkg',
+};
+
+// Which managers each system can have. Windows PowerShell 5 exists on Windows only.
+export function managersFor(platform: NodeJS.Platform): Manager[] {
+  return platform === 'win32'
+    ? ['winget', 'choco', 'scoop', 'pip', 'npm', 'dotnet', 'pwsh', 'winps', 'cargo', 'vcpkg']
+    : ['brew', 'pip', 'npm', 'dotnet', 'pwsh', 'cargo', 'vcpkg'];
+}
+
+// The program each manager is started with, unless Settings name another one.
+export function defaultExecutable(manager: Manager, platform: NodeJS.Platform): string {
+  switch (manager) {
+    case 'pip': return pythonExecutable(platform);
+    case 'winps': return 'powershell';
+    default: return manager;
+  }
+}
+
+export interface CommandContext {
+  platform?: NodeJS.Platform;
+  options?: InstallOptions;
+  policy?: OptionPolicy;
+  // Programs the user chose in Settings, by manager.
+  executables?: Partial<Record<Manager, string>>;
+}
+
+const exe = (manager: Manager, ctx: CommandContext) => ctx.executables?.[manager] || defaultExecutable(manager, ctx.platform ?? process.platform);
 export type PackageAction = 'install' | 'uninstall' | 'update';
 
 export interface Package {
@@ -31,6 +66,7 @@ const BREW = /^[a-z0-9][\w.+@/-]{0,127}$/i;
 const SCOOP = /^(?:[A-Za-z0-9][\w.-]{0,63}\/)?[A-Za-z0-9][\w.+-]{0,127}$/;
 
 export function isSafeId(manager: Manager, id: string): boolean {
+  if (isExtra(manager)) return isSafeExtraId(manager, id);
   if (manager === 'winget') return WINGET.test(id);
   if (manager === 'brew') return BREW.test(id) && !id.includes('..');
   if (manager === 'scoop') return SCOOP.test(id);
@@ -193,9 +229,9 @@ function powershell(script: string): Command {
 }
 
 // Scoop is a PowerShell script. Every value is checked by isSafeId or isSafeQuery and quoted again here.
-export function scoopCommand(args: string[]): Command {
+export function scoopCommand(args: string[], executable = 'scoop'): Command {
   const quoted = args.map((arg) => `'${arg.replace(/'/g, "''")}'`).join(' ');
-  return powershell(`& scoop ${quoted}; exit $LASTEXITCODE`);
+  return powershell(`& ${executable === 'scoop' ? 'scoop' : psQuote(executable)} ${quoted}; exit $LASTEXITCODE`);
 }
 
 // Chocolatey needs admin rights to change packages, so Windows asks for every change.
@@ -204,25 +240,66 @@ export function elevatedChoco(args: string[]): Command {
   return powershell(`$p = Start-Process -FilePath choco.exe -ArgumentList ${list} -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode`);
 }
 
-export function actionCommand(action: PackageAction, entry: Pick<Package, 'manager' | 'id' | 'kind'>): Command {
+export function actionCommand(action: PackageAction, entry: Pick<Package, 'manager' | 'id' | 'kind'>, ctx: CommandContext = {}): Command {
   if (!isSafeId(entry.manager, entry.id)) throw new Error(`${entry.id} is not a valid package name`);
+  const platform = ctx.platform ?? process.platform;
+  const options = ctx.options ?? {};
+  const extra = optionArgs(entry.manager, action, options, ctx.policy ?? { allowParameters: false, allowSkipHash: false });
+  const version = action === 'install' ? options.Version : undefined;
   switch (entry.manager) {
     case 'brew': {
       const kind = entry.kind === 'cask' ? '--cask' : '--formula';
-      if (action === 'update') return { command: 'brew', args: ['upgrade', kind, ...(entry.kind === 'cask' ? ['--greedy'] : []), entry.id] };
-      return { command: 'brew', args: [action, kind, entry.id] };
+      if (action === 'update') return { command: exe('brew', ctx), args: ['upgrade', kind, ...(entry.kind === 'cask' ? ['--greedy'] : []), ...extra, entry.id] };
+      return { command: exe('brew', ctx), args: [action, kind, ...extra, entry.id] };
     }
     case 'winget': {
       const verb = action === 'update' ? 'upgrade' : action;
       const agree = action === 'uninstall' ? [] : ['--accept-package-agreements'];
-      return { command: 'winget', args: [verb, ...wingetTarget(entry.id), '--silent', ...agree, ...WINGET_FLAGS] };
+      const quiet = options.InteractiveInstallation ? ['--interactive'] : ['--silent'];
+      return { command: exe('winget', ctx), args: [verb, ...wingetTarget(entry.id), ...quiet, ...agree, ...extra, ...WINGET_FLAGS] };
     }
     case 'choco': {
       const verb = action === 'update' ? 'upgrade' : action;
-      return elevatedChoco([verb, entry.id, '-y', '--no-progress']);
+      return elevatedChoco([verb, entry.id, '-y', '--no-progress', ...extra]);
     }
-    case 'scoop':
-      return scoopCommand([action, entry.id]);
+    case 'scoop': {
+      const target = action === 'install' && version ? `${entry.id}@${version}` : entry.id;
+      return scoopCommand([action, target, ...extra], exe('scoop', ctx));
+    }
+    case 'pip': {
+      const base = ['-m', 'pip'];
+      const quiet = ['--disable-pip-version-check', '--no-input'];
+      if (action === 'uninstall') return { command: exe('pip', ctx), args: [...base, 'uninstall', '-y', ...quiet, ...extra, entry.id] };
+      const target = version ? `${entry.id}==${version}` : entry.id;
+      return { command: exe('pip', ctx), args: [...base, 'install', ...(action === 'update' ? ['--upgrade'] : []), ...quiet, ...extra, target] };
+    }
+    case 'npm': {
+      if (action === 'uninstall') return npmCommand(['uninstall', '-g', ...extra, entry.id], platform, exe('npm', ctx));
+      const target = action === 'update' ? `${entry.id}@latest` : version ? `${entry.id}@${version}` : entry.id;
+      return npmCommand(['install', '-g', ...extra, target], platform, exe('npm', ctx));
+    }
+    case 'dotnet':
+      return { command: exe('dotnet', ctx), args: ['tool', action, '--global', ...extra, entry.id] };
+    case 'pwsh': case 'winps': {
+      const scope = /^(machine|global)$/i.test(options.InstallationScope ?? '') ? 'AllUsers' : 'CurrentUser';
+      const params = ctx.policy?.allowParameters ? extra.map(psQuote).join(' ') : '';
+      const name = psQuote(entry.id);
+      const script = action === 'install'
+        ? `Install-Module -Name ${name} -Scope ${scope} -Force -AllowClobber${version ? ` -RequiredVersion ${psQuote(version)}` : ''}${options.PreRelease ? ' -AllowPrerelease' : ''} ${params}`
+        : action === 'update'
+          ? `Update-Module -Name ${name} -Force${options.PreRelease ? ' -AllowPrerelease' : ''} ${params}`
+          : `Uninstall-Module -Name ${name} -AllVersions -Force ${params}`;
+      const shell = entry.manager === 'pwsh' ? 'pwsh' : 'powershell';
+      const command = powershellScript(shell, `$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; ${script.trim()}`);
+      return { command: ctx.executables?.[entry.manager] || command.command, args: command.args };
+    }
+    case 'cargo':
+      if (action === 'uninstall') return { command: exe('cargo', ctx), args: ['uninstall', ...extra, entry.id] };
+      return { command: exe('cargo', ctx), args: ['install', ...(action === 'update' ? ['--force'] : []), ...extra, entry.id] };
+    case 'vcpkg':
+      if (action === 'uninstall') return { command: exe('vcpkg', ctx), args: ['remove', '--recurse', ...extra, entry.id] };
+      if (action === 'update') return { command: exe('vcpkg', ctx), args: ['upgrade', entry.id.split('[')[0], '--no-dry-run', ...extra] };
+      return { command: exe('vcpkg', ctx), args: ['install', ...extra, entry.id] };
   }
 }
 
@@ -265,6 +342,14 @@ export function repairPlan(entry: Pick<Package, 'manager' | 'id' | 'kind'>): Rep
         clean: [scoopCommand(['cache', 'rm', entry.id.split('/').pop() as string])],
         reinstall: [scoopCommand(['uninstall', entry.id.split('/').pop() as string]), scoopCommand(['install', entry.id])],
       };
+    default: {
+      // Developer tools: clear the manager's download cache, then remove and install again.
+      const python = pythonExecutable(process.platform);
+      const clean: Command[] = entry.manager === 'pip' ? [{ command: python, args: ['-m', 'pip', 'cache', 'remove', entry.id] }]
+        : entry.manager === 'npm' ? [npmCommand(['cache', 'verify'], process.platform)]
+          : [];
+      return { clean, reinstall: [actionCommand('uninstall', entry), actionCommand('install', entry)] };
+    }
   }
 }
 

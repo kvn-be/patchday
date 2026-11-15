@@ -22,6 +22,7 @@ interface Api extends PackageApi {
   onSelfReady(listener: (version: string) => void): void;
   onProgress(listener: (items: ProgressItem[]) => void): void;
   onLog(listener: (message: string) => void): void;
+  onCheckRequested(listener: () => void): void;
 }
 declare global {
   interface Window {
@@ -35,8 +36,8 @@ declare global {
   }
 }
 
-type Page = 'overview' | 'updates' | 'packages' | 'history' | 'settings';
-const PAGES: Page[] = ['overview', 'updates', 'packages', 'history', 'settings'];
+type Page = 'overview' | 'updates' | 'packages' | 'bundles' | 'queue' | 'history' | 'settings';
+const PAGES: Page[] = ['overview', 'updates', 'packages', 'bundles', 'queue', 'history', 'settings'];
 
 const api = window.patchday;
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -452,11 +453,15 @@ const ask = (title: string, text: string, yes: string): Promise<boolean> =>
     dialog.showModal();
   });
 
+let platform = '';
 const views = createViews({
   api,
   t,
   settings: () => settings,
   setSettings: (next) => { settings = next; renderOverview(); },
+  saveSettings: (values) => api.saveSettings(values),
+  showPage: (next) => showPage(next as Page),
+  platform: () => platform,
   busy: () => busy,
   setBusy: (label) => setBusy(label),
   ask,
@@ -465,6 +470,7 @@ const views = createViews({
 async function start(): Promise<void> {
   const state = await api.state();
   settings = state.settings;
+  platform = state.platform;
   hasToken = state.hasToken;
   hasAdminPassword = state.hasAdminPassword;
   $('sudo-card').hidden = state.platform === 'win32';
@@ -579,6 +585,8 @@ async function start(): Promise<void> {
     void perform(() => api.update(keys), t().updating);
   });
   api.onLog((message) => { $('progress').textContent = message; });
+  // The tray menu asks for a check of containers and the scheduled packages too.
+  api.onCheckRequested(() => { if (!busy) void perform(api.check, t().checking); });
   api.onProgress((items) => {
     live = items;
     renderReport();

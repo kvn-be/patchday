@@ -1,3 +1,5 @@
+import type { InstallOptions } from '../core/options.ts';
+import type { Manager } from '../core/packages.ts';
 export type Outcome = 'planned' | 'applied' | 'waiting' | 'rolled-back' | 'failed';
 export type ItemSource = 'docker' | 'brew' | 'winget' | 'choco' | 'scoop';
 
@@ -65,6 +67,33 @@ export interface Settings {
   // Patchday checks for a new version of itself once a day and installs it when it closes.
   autoSelfUpdate: boolean;
   lastSelfCheck?: string;
+  // Install options per package, by manager:id, in UniGetUI's keys.
+  packageOptions: Record<string, InstallOptions>;
+  disabledManagers: Manager[];
+  // Programs chosen by the user instead of the one on PATH, by manager.
+  managerPaths: Partial<Record<Manager, string>>;
+  // Security: all off by default, as in UniGetUI.
+  allowParameters: boolean;
+  allowCommands: boolean;
+  allowSkipHash: boolean;
+  importParameters: boolean;
+  importCommands: boolean;
+  // How many package operations may run at once (different managers only).
+  parallelOps: number;
+  // Background: keep running in the menu bar or tray, check for package updates, notify.
+  closeToTray: boolean;
+  startAtLogin: boolean;
+  checkEveryHours: number;
+  notifyUpdates: boolean;
+  autoUpdatePackages: boolean;
+  showIcons: boolean;
+  // Backups of the installed packages as a bundle.
+  backupEnabled: boolean;
+  backupFolder: string;
+  backupKeep: number;
+  gistBackup: boolean;
+  gistId?: string;
+  lastBackup?: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -82,6 +111,25 @@ export const DEFAULT_SETTINGS: Settings = {
   adminAsked: false,
   skipped: {},
   autoSelfUpdate: true,
+  packageOptions: {},
+  disabledManagers: [],
+  managerPaths: {},
+  allowParameters: false,
+  allowCommands: false,
+  allowSkipHash: false,
+  importParameters: false,
+  importCommands: false,
+  parallelOps: 1,
+  closeToTray: true,
+  startAtLogin: false,
+  checkEveryHours: 24,
+  notifyUpdates: true,
+  autoUpdatePackages: false,
+  showIcons: true,
+  backupEnabled: true,
+  backupFolder: '',
+  backupKeep: 10,
+  gistBackup: false,
 };
 
 export interface ExecResult {
@@ -90,7 +138,7 @@ export interface ExecResult {
   stderr: string;
 }
 
-export type Exec = (command: string, args: string[], options?: { timeoutMs?: number; env?: Record<string, string> }) => Promise<ExecResult>;
+export type Exec = (command: string, args: string[], options?: { timeoutMs?: number; env?: Record<string, string>; signal?: AbortSignal }) => Promise<ExecResult>;
 
 // Settings files from before policy version 2 saved "autoMinor: true" as the default.
 // Minor updates are optional now; security fixes still install by themselves.

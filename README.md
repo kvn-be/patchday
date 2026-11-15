@@ -5,7 +5,7 @@
 <h1 align="center">Patchday</h1>
 
 <p align="center">
-  Scheduled, rule-based updates for Homebrew, winget, Chocolatey, Scoop and Docker, with a backup first, a health check after, and a rollback if anything fails. Find, install and remove packages in one place.
+  Scheduled, rule-based updates for Homebrew, winget, Chocolatey, Scoop and Docker, with a backup first, a health check after, and a rollback if anything fails. One place to find, install, update and remove packages from eleven package managers, with bundles that open in UniGetUI too.
 </p>
 
 <p align="center">
@@ -47,9 +47,15 @@
 - **Pick your own time.** Turn two wheels on Overview: the day and the hour of the weekly run.
 - **See changes before they happen.** **Check now** lists every update and changes nothing.
 - **Update packages.** Homebrew on macOS, winget, Chocolatey and Scoop on Windows.
-- **Manage packages.** See everything installed, search all package managers at once, and install, update or remove several packages in one go.
+- **Manage packages.** Homebrew, winget, Chocolatey, Scoop, pip, npm, .NET tools, PowerShell modules (5 and 7), Cargo and vcpkg. See everything installed, search all of them at once, and install, update or remove many packages in one go.
+- **Work through a queue.** Operations wait in a queue you can watch, cancel and retry. Different package managers work side by side.
+- **Set install options per package.** Version, scope, architecture, install location, extra arguments, commands before and after, and more. They apply to every install and update of that package.
+- **Read the details.** Description, publisher, homepage, license, release notes and the versions you can install.
+- **Use bundles.** Save package lists as bundles and open them on any computer. Bundles are UniGetUI's `.ubundle` format, so they move between both apps; older UniGetUI bundles in JSON, YAML and XML open too.
+- **Manage sources.** Add or remove Homebrew taps, Scoop buckets, winget and Chocolatey sources and PowerShell repositories.
+- **Keep running in the background.** A menu bar or tray icon shows pending package updates, checks for new ones and can update them automatically.
+- **Back up your package list.** Once a day as a bundle in a folder of your choice, and optionally in a secret GitHub Gist.
 - **Skip or ignore updates.** Skip one version of a package, or ignore its updates until you allow them again.
-- **Move to a new computer.** Export your package list and import it on another machine.
 - **Look back.** The history keeps the last 1000 installs, updates, removals and runs.
 - **Update Docker containers.** Patchday finds Compose stacks by itself and works with Portainer if you use it.
 - **Stay in control.** Risky updates become suggestions that wait for your decision.
@@ -150,19 +156,23 @@ Image tags keep their scheme: `1.2.3-alpine` only moves to another `-alpine` tag
   <img src="docs/images/packages.png" alt="Packages page: one search shows installed packages and packages to install" width="640">
 </p>
 
-A sidebar leads to **Overview**, **Updates**, **Packages** and **History**, with **Settings** at its foot. Every page has its title, one sentence on what it does, and its main action at the top right.
+A sidebar leads to **Overview**, **Updates**, **Packages**, **Bundles**, **Queue** and **History**, with **Settings** at its foot. Every page has its title, one sentence on what it does, and its main action at the top right.
 
 | Page | What you can do |
 | --- | --- |
 | Overview | See how many updates are ready. Turn the schedule on or off, pick its day and time and see the date of the next run, all in one box. Below: the last run and what waits for your decision. |
 | Updates | The latest check or run, grouped into what waits for you, problems, what installs by itself and what was applied. |
-| Packages | One search for both: installed packages first, packages you can add below. Update, skip a version or uninstall right in the row. |
-| Settings | Choose what happens at a run, keep the **Never update** list, pick light, dark or system appearance, and connect Portainer. |
+| Packages | Three tabs: **Installed**, **Updates** and **Discover**, filtered by package manager. Select rows to install, update, remove, ignore or add them to a bundle together. A package's name opens its details and install options. |
+| Bundles | Open a bundle, add your installed packages or packages from **Packages**, set install options per package, save it, and install all or a selection. |
+| Queue | Every install, update and removal with its state and the tool's output. Cancel what waits or runs, try failed ones again. |
+| Settings | Choose what happens at a run, keep the **Never update** list, pick light, dark or system appearance, connect Portainer, and set up package managers and their sources, security, background checks and backups. |
 | History | The last 1000 installs, updates, removals and runs, with the tool's message for failures. **Export logs** saves all of it as a text file. |
 
 - **Skip** hides one version of a package. The next newer version shows up again.
 - **Never update** in **Settings** leaves a package or image alone, in the package list and in scheduled runs.
-- **Export list** saves your installed packages as a JSON file. **Import list** reads such a file and lists the packages that are not installed yet, ready to install. Entries this system cannot install are left out and counted.
+- **Bundles** replace the old package list. Lists exported by Patchday 1.x still open on **Bundles**.
+- **Opening a bundle** first shows a report of everything that could run code or weaken a check: extra arguments, commands before or after, skipped checksums, programs to close, admin rights, other sources. Extra arguments and commands are removed unless **Settings › Security** allows them; this matches UniGetUI.
+- Entries a system cannot install, for example winget packages on a Mac, stay in the bundle as **Not installable here** and are saved again with it.
 
 Installs and removals you start yourself run in your own user account, never through the admin task. On Windows, installers may ask for admin rights, and Chocolatey always does.
 
@@ -186,10 +196,20 @@ While Portainer is running and no token is saved, stacks that might belong to it
 | Install updates on schedule | Off | While off, scheduled runs only report. |
 | Install minor updates automatically | On | While off, minor updates of containers are suggestions. |
 | Update Patchday automatically | On | Checks once a day, downloads in the background and installs when you close Patchday. |
-
-The schedule switch, day and time are on **Overview**. Everything else is on the **Settings** page, along with the appearance, the Portainer connection and, on Windows, the admin access.
+| Package managers | All found | Turn a manager off, choose its program, manage its sources. |
+| Allow custom arguments, commands, skipping checksums | Off | Install options that pass arguments, run commands or skip checksum checks only work while these are on. |
+| Keep arguments and commands from imported bundles | Off | Needs the matching setting above. |
+| Keep running when the window is closed | On | Shows the menu bar or tray icon and keeps the queue and checks going. |
+| Start at login | Off | Starts hidden in the menu bar or tray. |
+| Check packages | Every 24 h | Looks for package updates in the background and notifies you. |
+| Update all packages automatically | Off | Installs package updates found in the background. Single packages can do this through their install options. |
+| Operations at the same time | 1 | Up to 4; never two of the same package manager. |
+| Show package icons | On | Loads icons from UniGetUI's public icon list (MIT). |
+| Back up the package list once a day | On | Saves a bundle to `Documents/Patchday backups`, keeps the last 10. Optionally also to a secret GitHub Gist with a token that may only change gists. |
 | Never update | Empty | Names of images or packages to leave alone, separated by commas. |
 | Portainer address and token | Empty | Connects Portainer stacks. |
+
+The schedule switch, day and time are on **Overview**. Everything else is on the **Settings** page, along with the appearance, the Portainer connection and, on Windows, the admin access.
 
 Language is at the bottom of the sidebar.
 
@@ -207,10 +227,12 @@ Inside that folder:
 - `history.json`: the last 1000 installs, updates, removals and runs.
 - `reports/`: one file per run.
 - `logs/`: the log book behind **Export logs**, about 1 MB plus one older file.
+- `icons/`: package icons and the icon list, refreshed once a day.
+- `github.token`: the GitHub token for gist backups, encrypted by the system keychain.
 - `backups/`: stack files and database dumps, one folder per stack update. These may contain sensitive data. After each run, folders older than 30 days are removed, but the 10 newest always stay. Folders you add by hand are never touched.
 - `portainer.token`: your token, encrypted by the operating system.
 
-To find updates, Patchday sends image names to Docker Hub and other public registries, and asks GitHub for its own latest version.
+To find updates, Patchday sends image names to Docker Hub and other public registries, and asks GitHub for its own latest version. For pip, .NET tools and Cargo it asks PyPI, NuGet and crates.io about the package names involved. With icons on, it loads the icon list from GitHub and each icon from the address in that list. Gist backups go to your own GitHub account only when you turn them on.
 
 ## Troubleshooting
 
@@ -271,7 +293,9 @@ scripts/      Build script
 - Scheduled runs on Windows, the admin task and winget support have had little real-world testing.
 - Homebrew, winget, Chocolatey and Scoop report no percentage, so their bars show activity until a package is finished.
 - Scoop and the **Packages** page on Windows have had little real-world testing.
-- Package details such as publisher, download size or install options, and installing a specific older version, are not available yet.
+- pip cannot search, because PyPI has no search API; it finds exact project names only.
+- pip, npm, .NET tools, PowerShell modules, Cargo and vcpkg are not part of scheduled runs. Their updates install from **Packages**, from the tray, or automatically through **Update all packages automatically**.
+- The new package managers, bundles and the tray have had little real-world testing on Windows.
 - With the admin task set up, scheduled runs also update Scoop apps with admin rights. Scoop warns about that but works.
 - Some installers refuse to run as administrator. They show that as the reason.
 

@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('patchday', {
   details: (entry: unknown) => ipcRenderer.invoke('details', entry),
   icons: (packages: unknown[]) => ipcRenderer.invoke('icons', packages),
   openUrl: (url: string) => ipcRenderer.invoke('open-url', url),
+  openApp: (entry: unknown) => ipcRenderer.invoke('open-app', entry),
   setOptions: (key: string, options: unknown) => ipcRenderer.invoke('options-set', key, options),
   bundleOpen: () => ipcRenderer.invoke('bundle-open'),
   bundleSave: (packages: unknown[], incompatible: unknown[]) => ipcRenderer.invoke('bundle-save', packages, incompatible),

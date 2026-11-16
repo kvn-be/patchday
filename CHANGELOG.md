@@ -2,6 +2,13 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## 2.0.2 - 2026-11-17
+
+### Added
+
+- App updates that fail in a run get one more try in your own session: a running app is closed the normal way after a 60-second notice, updated and started again; Visual Studio updates through its own installer; in runs you start yourself the installer opens with its window; as the last step Patchday starts the app so its own updater runs, then checks again after 10 minutes. Apps that ask about unsaved work stay open. Group Policy, full disks, pinned packages and cancelled installs are left alone.
+- Clicking the name of an app in **Updates** or **Packages** starts the program (Windows: found through the Start menu; macOS: through the cask). Packages without a program open their details.
+
 ## 2.0.1 - 2026-11-16
 
 ### Fixed

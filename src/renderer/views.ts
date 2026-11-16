@@ -36,6 +36,7 @@ export interface PackageApi {
   details(entry: Package): Promise<Details & { screenshots: string[] }>;
   icons(packages: Package[]): Promise<Record<string, string>>;
   openUrl(url: string): Promise<void>;
+  openApp(entry: Package): Promise<'started' | 'none' | 'failed'>;
   setOptions(key: string, options: InstallOptions): Promise<Settings>;
   bundleOpen(): Promise<OpenedBundle | null>;
   bundleSave(packages: BundlePackage[], incompatible: IncompatiblePackage[]): Promise<string | null>;
@@ -500,10 +501,11 @@ export function createViews(ctx: ViewContext) {
     check.setAttribute('aria-label', fill(t().selectRow, { name: entry.name }));
     check.addEventListener('change', () => { (check.checked ? selected.add(key(entry)) : selected.delete(key(entry))); renderList(); });
     node.prepend(check);
-    // The name opens the details.
+    // The name starts the program; packages without one (pip, npm, ...) open the details instead.
     const nameButton = element('button', 'name-link', entry.name);
     nameButton.type = 'button';
-    nameButton.addEventListener('click', () => void openDetails(entry));
+    nameButton.title = fill(t().openApp, { name: entry.name });
+    nameButton.addEventListener('click', () => void startOrDetails(installed ?? entry, nameButton));
     title.firstElementChild?.replaceWith(nameButton);
 
     const running = runningFor(entry);
@@ -556,6 +558,15 @@ export function createViews(ctx: ViewContext) {
   }
 
   // ---------- Details and options ----------
+
+  async function startOrDetails(entry: Package, from: HTMLButtonElement): Promise<void> {
+    from.disabled = true;
+    const started = await ctx.api.openApp(entry).catch(() => 'failed' as const);
+    from.disabled = false;
+    if (started === 'started') return;
+    if (started === 'failed') from.title = fill(t().openAppFailed, { name: entry.name });
+    await openDetails(entry);
+  }
 
   async function openDetails(entry: Package): Promise<void> {
     const installed = installedEntry(entry);

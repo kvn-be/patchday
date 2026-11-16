@@ -1,5 +1,6 @@
 import { nextRun } from '../core/schedule.ts';
 import type { ProgressItem, Report, ReportItem, Settings } from '../engine/types.ts';
+import type { Package } from '../core/packages.ts';
 import { reason, STRINGS, type Language } from './i18n.ts';
 import { createViews, type PackageApi } from './views.ts';
 
@@ -77,7 +78,7 @@ const PILL: Record<ReportItem['outcome'], [string, keyof typeof STRINGS.en]> = {
   'rolled-back': ['back', 'bBack'],
   failed: ['back', 'bFailed'],
 };
-const PHASES = { backup: 'phaseBackup', update: 'phaseUpdate', test: 'phaseTest', rollback: 'phaseRollback', retry: 'phaseRetry', reinstall: 'phaseReinstall' } as const;
+const PHASES = { backup: 'phaseBackup', update: 'phaseUpdate', test: 'phaseTest', rollback: 'phaseRollback', retry: 'phaseRetry', reinstall: 'phaseReinstall', close: 'phaseClose', installer: 'phaseInstaller', open: 'phaseOpen' } as const;
 
 const formatWhen = (iso: string) => new Date(iso).toLocaleString(t().locale, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hour12: false });
 const count = (items: ReportItem[], ...outcomes: ReportItem['outcome'][]) => items.filter((item) => outcomes.includes(item.outcome)).length;
@@ -142,7 +143,7 @@ function renderLive(box: HTMLElement, items: ProgressItem[]): void {
 
 // Containers: back up, update, test, done. Packages: install, repair, done.
 const CONTAINER_STEPS: Partial<Record<ProgressItem['phase'] & string, number>> = { backup: 0, update: 1, test: 2, rollback: 2 };
-const PACKAGE_STEPS: Partial<Record<ProgressItem['phase'] & string, number>> = { update: 0, retry: 1, reinstall: 1 };
+const PACKAGE_STEPS: Partial<Record<ProgressItem['phase'] & string, number>> = { update: 0, retry: 1, reinstall: 1, close: 1, installer: 1, open: 1 };
 const stepViews = new Map<string, ReturnType<Window['Patchday']['mountSteps']>>();
 // The last phase each item reached, so a failure is marked where it happened.
 const reached = new Map<string, number>();
@@ -215,6 +216,7 @@ function renderReport(): void {
       const approved = entry.optional ? settings.approved.includes(entry.optional) : false;
       const pill = entry.optional ? approveButton(entry.optional, approved) : element('span', `pd-pill pd-pill-${tone}`, t()[text] as string);
       const row = item(entry.name, SOURCE[entry.source], `${entry.from} → ${entry.to}`, pill);
+      if (entry.source !== 'docker') linkName(row, entry);
       if (entry.outcome === 'waiting' && entry.key) row.querySelector('.acts')?.append(updateNowButton(entry));
       if (entry.reason) row.append(element('span', 'reason', approved ? t().optionalApproved : reason(language(), entry.reason)));
       if (entry.detail) {
@@ -226,6 +228,24 @@ function renderReport(): void {
     }
   }
   for (const note of current.notes) box.append(element('div', 'notes', note));
+}
+
+// The name of an app update starts the program. Without one, a short note says so.
+function linkName(row: HTMLElement, entry: ReportItem): void {
+  const button = element('button', 'name-link', entry.name) as HTMLButtonElement;
+  button.type = 'button';
+  button.title = fill(t().openApp, { name: entry.name });
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    const started = await api.openApp({ manager: entry.source, id: entry.id ?? entry.name, name: entry.name, version: entry.from } as Package).catch(() => 'failed' as const);
+    button.disabled = false;
+    if (started === 'started') return;
+    const note = element('span', 'reason', fill(started === 'none' ? t().noApp : t().openAppFailed, { name: entry.name }));
+    note.setAttribute('role', 'status');
+    row.append(note);
+    setTimeout(() => note.remove(), 5000);
+  });
+  row.querySelector('.name > span')?.replaceWith(button);
 }
 
 // An optional update installs at the next run once approved; approving again takes it back.

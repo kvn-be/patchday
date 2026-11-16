@@ -59,6 +59,8 @@ export interface ViewContext {
   busy(): boolean;
   setBusy(label: string): void;
   ask(title: string, text: string, yes: string): Promise<boolean>;
+  // Draws the update run's steps into the box; false while no run is going.
+  renderRun(box: HTMLElement): boolean;
   showPage(page: string): void;
   platform(): string;
 }
@@ -300,7 +302,7 @@ export function createViews(ctx: ViewContext) {
   }
 
   function renderCounts(): void {
-    const active = operations.filter((operation) => operation.state === 'queued' || operation.state === 'running').length;
+    const active = operations.filter((operation) => operation.state === 'queued' || operation.state === 'running').length + (ctx.busy() ? 1 : 0);
     const queueCount = document.getElementById('nav-queue-count');
     if (queueCount) {
       queueCount.hidden = active === 0;
@@ -506,7 +508,7 @@ export function createViews(ctx: ViewContext) {
 
     const running = runningFor(entry);
     if (running) {
-      acts.append(element('span', 'pd-pill pd-pill-wait', running.state === 'running' ? t().qRunning : t().qQueued));
+      acts.append(element('span', 'pd-pill pd-pill-wait', running.state === 'running' ? t().qRunning : ctx.busy() ? t().qWaitsRun : t().qQueued));
       return node;
     }
     if (installed && isHeld(installed)) acts.append(element('span', 'pd-pill pd-pill-wait pd-pill-small', t().ignored));
@@ -942,7 +944,12 @@ export function createViews(ctx: ViewContext) {
     const head = pageHead('queue-title', t().navQueue, t().queueLead, [clear]);
     const { frame, panel } = scrollPanel();
     page.append(head, frame);
-    if (!operations.length) panel.append(element('div', 'notes', t().qEmpty));
+    // The update run (containers and scheduled packages) shows here too, so all progress is in one place.
+    const run = element('div', 'run-live');
+    run.id = 'run-live';
+    const running = ctx.renderRun(run);
+    if (running) panel.append(run);
+    if (!operations.length && !running) panel.append(element('div', 'notes', t().qEmpty));
     const stateLabel = { queued: t().qQueued, running: t().qRunning, done: t().qDone, failed: t().qFailed, cancelled: t().qCancelled } as const;
     const tone = { queued: 'plain', running: 'wait', done: 'ok', failed: 'back', cancelled: 'plain' } as const;
     const actionLabel = { install: t().qInstall, update: t().qUpdate, uninstall: t().qUninstall } as const;
@@ -953,7 +960,8 @@ export function createViews(ctx: ViewContext) {
       const title = element('div', 'name');
       title.append(element('span', '', `${actionLabel[operation.action]}: ${entry.name}`), element('small', '', [managerName(entry.manager), entry.id, operation.phase ? phaseLabel[operation.phase] ?? operation.phase : '', operation.finishedAt ? when(operation.finishedAt) : ''].filter(Boolean).join(' · ')));
       const acts = element('div', 'acts');
-      acts.append(element('span', `pd-pill pd-pill-small pd-pill-${tone[operation.state]}`, stateLabel[operation.state]));
+      const waitsForRun = operation.state === 'queued' && ctx.busy();
+      acts.append(element('span', `pd-pill pd-pill-small pd-pill-${tone[operation.state]}`, waitsForRun ? t().qWaitsRun : stateLabel[operation.state]));
       if (operation.state === 'queued' || operation.state === 'running') acts.append(button(t().qCancel, 'line', () => void ctx.api.queueCancel(operation.id)));
       if (operation.state === 'failed' || operation.state === 'cancelled') acts.append(button(t().qRetry, 'line', () => void ctx.api.queueRetry(operation.id)));
       if (operation.log.length) {
@@ -1321,5 +1329,11 @@ export function createViews(ctx: ViewContext) {
       if (page === 'settings' && !managers) void loadManagers();
     },
     takeBundle,
+    // Called when the update run starts, moves or ends.
+    refreshRun(): void {
+      renderQueue();
+      renderCounts();
+      renderList();
+    },
   };
 }

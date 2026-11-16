@@ -135,6 +135,7 @@ function renderLive(box: HTMLElement, items: ProgressItem[]): void {
     holder.append(stepsFor(entry, label).element);
     row.append(holder);
     if (entry.reason) row.append(element('span', 'reason', reason(language(), entry.reason)));
+    else if (entry.phase === 'test' && entry.state === 'running') row.append(element('span', 'reason', t().testHint));
     box.append(row);
   }
 }
@@ -163,6 +164,15 @@ function stepsFor(entry: ProgressItem, label: string): ReturnType<Window['Patchd
   return view;
 }
 
+// The update run inside Queue: its overall bar and one row per item.
+function renderRun(box: HTMLElement): boolean {
+  box.replaceChildren();
+  if (!live) return false;
+  box.append(element('div', 'pd-list-head', t().runTitle));
+  renderLive(box, live);
+  return true;
+}
+
 function renderReport(): void {
   const box = $('report');
   box.replaceChildren();
@@ -170,8 +180,15 @@ function renderReport(): void {
   $('updates-lead').textContent = current
     ? fill(t().updatesLead, { count: count(current.items, 'planned', 'waiting'), when: formatWhen(current.startedAt) })
     : t().updatesLeadNone;
+  // A running update shows its steps in Queue, the one place for progress.
   if (live) {
-    renderLive(box, live);
+    const note = element('div', 'empty');
+    const go = element('button', 'pd-btn pd-btn-main', t().showProgress) as HTMLButtonElement;
+    go.type = 'button';
+    go.addEventListener('click', () => showPage('queue'));
+    go.style.justifySelf = 'start';
+    note.append(element('p', '', t().runInQueue), go);
+    box.append(note);
     return;
   }
   if (!current) {
@@ -234,7 +251,7 @@ function updateNowButton(entry: ReportItem): HTMLButtonElement {
   node.addEventListener('click', async () => {
     const text = fill(t().updateNowText, { name: entry.name, from: entry.from, to: entry.to, reason: reason(language(), entry.reason) });
     if (!(await ask(fill(t().updateNowTitle, { name: entry.name }), text, t().updateNow))) return;
-    showPage('updates');
+    showPage('queue');
     await perform(() => api.updateNow([entry.key as string]), t().updating);
   });
   return node;
@@ -408,6 +425,7 @@ function setBusy(label: string): void {
   $('progress').textContent = label;
   all<HTMLButtonElement>('[data-action]').forEach((node) => { node.disabled = busy; });
   if (!busy) renderOverview();
+  views.refreshRun();
 }
 
 async function perform(action: () => Promise<Report>, label: string): Promise<void> {
@@ -464,6 +482,7 @@ const views = createViews({
   platform: () => platform,
   busy: () => busy,
   setBusy: (label) => setBusy(label),
+  renderRun: (box) => renderRun(box),
   ask,
 });
 
@@ -575,13 +594,13 @@ async function start(): Promise<void> {
   $('confirm-no').addEventListener('click', () => confirm.close());
   $('confirm-yes').addEventListener('click', () => {
     confirm.close();
-    showPage('updates');
+    showPage('queue');
     void perform(() => api.update(), t().updating);
   });
   $('confirm-all').addEventListener('click', () => {
     const keys = waitingKeys();
     confirm.close();
-    showPage('updates');
+    showPage('queue');
     void perform(() => api.update(keys), t().updating);
   });
   api.onLog((message) => { $('progress').textContent = message; });
@@ -590,6 +609,7 @@ async function start(): Promise<void> {
   api.onProgress((items) => {
     live = items;
     renderReport();
+    views.refreshRun();
   });
 
   const showSelf = (version: string | null) => {

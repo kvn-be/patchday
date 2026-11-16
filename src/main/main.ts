@@ -340,7 +340,8 @@ function registerIpc(): void {
   });
   ipcMain.handle('check', (event) => guarded('preview', event.sender));
   ipcMain.handle('update', (event, force: unknown) => {
-    if (force === undefined) return guarded('apply', event.sender);
+    // IPC turns a missing argument into null; no list means a normal run.
+    if (force === undefined || force === null || (Array.isArray(force) && force.length === 0)) return guarded('apply', event.sender);
     if (!validKeys(force)) throw new Error('Nothing to update');
     return guarded('apply', event.sender, { force });
   });

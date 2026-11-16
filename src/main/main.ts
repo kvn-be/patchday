@@ -7,13 +7,12 @@ import { createPortainerClient } from '../engine/portainer.ts';
 import { exec } from '../engine/exec.ts';
 import { createTagLookup } from '../engine/registry.ts';
 import { createAdvisoryLookup, createReleaseNotesLookup } from '../engine/releases.ts';
-import { lastLines, run, summarize, type RunOptions } from '../engine/run.ts';
-import { diagnoseWinget, USER_SCOPE } from '../core/failures.ts';
+import { BREW_ENV, run, summarize, type RunOptions } from '../engine/run.ts';
+import { canRescue, rescue } from '../engine/rescue.ts';
 import { WORKER_FLAG } from '../core/elevation.ts';
 import { backupsToRemove } from '../core/retention.ts';
 import { addHistory, type HistoryEntry } from '../core/history.ts';
 import { formatLogs, formatRun, LOG_ROTATE_BYTES, runLogName, runLogsToRemove } from '../core/logs.ts';
-import { isSafeId, WINGET_FLAGS, wingetTarget, type Manager } from '../core/packages.ts';
 import { selfCheckDue } from '../core/selfupdate.ts';
 import { managersFor, search } from '../engine/packages.ts';
 import { createHub, fetchText, sanitizeHubSettings, type Hub } from './hub.ts';
@@ -167,27 +166,34 @@ async function writeRunLog(report: Report): Promise<void> {
   for (const name of runLogsToRemove(names)) await rm(data('logs', 'runs', name), { force: true });
 }
 
-// winget will not update a per-user install from the admin task. Those packages get one more try
-// here, in the user's own session, and the saved report and run log are updated with the result.
-async function retryUserScope(report: Report): Promise<Report> {
-  const stuck = report.items.filter((item) => item.source === 'winget' && item.outcome === 'failed' && item.reason === USER_SCOPE);
-  if (process.platform !== 'win32' || stuck.length === 0) return report;
-  const items = [...report.items];
-  for (const item of stuck) {
-    const id = item.id ?? item.name;
-    if (!isSafeId('winget', id)) continue;
-    const result = await exec('winget', ['upgrade', ...wingetTarget(id), '--silent', '--accept-package-agreements', ...WINGET_FLAGS], { timeoutMs: 30 * 60_000 });
-    const diagnosis = result.code === 0 ? null : diagnoseWinget(result.code, `${result.stdout}\n${result.stderr}`);
-    const done = result.code === 0 || Boolean(diagnosis?.applied);
-    appendLog(`user scope ${id}: ${done ? 'done' : `failed: ${diagnosis?.reason}`}`);
-    items[items.indexOf(item)] = done
-      ? { ...item, outcome: 'applied', reason: diagnosis?.reason ?? 'winget update for your user', detail: undefined }
-      : { ...item, reason: diagnosis?.reason ?? item.reason, detail: lastLines(result) };
-  }
-  const problems = items.some((item) => item.outcome === 'failed' || item.outcome === 'rolled-back');
-  const updated: Report = { ...report, items, status: problems ? 'error' : items.some((item) => item.outcome === 'waiting') ? 'warning' : 'ok' };
+// Updates that failed in the run get one more ladder here, in the user's own session: close the
+// program and try again (also for per-user winget installs the admin task cannot touch), show the
+// installer when someone is there, or start the app so it updates itself. See engine/rescue.ts.
+async function followUp(report: Report, attended: boolean, base: ProgressItem[] = [], onItems: (items: ProgressItem[]) => void = () => {}): Promise<Report> {
+  if (report.mode !== 'apply' || !report.items.some(canRescue)) return report;
+  const settings = await loadSettings();
+  const de = settings.language === 'de';
+  const rescuedKeys = new Set(report.items.filter(canRescue).map((item) => `${item.source}:${item.name}`));
+  const others = base.filter((item) => !rescuedKeys.has(`${item.source}:${item.name}`));
+  appendLog(`rescue started for ${rescuedKeys.size} updates`);
+  const updated = await rescue({
+    exec,
+    platform: process.platform,
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    log: appendLog,
+    attended,
+    brewEnv: BREW_ENV,
+    onProgress: (items) => onItems([...others, ...items]),
+    notifyClosing: (name, seconds) => new Notification({
+      title: 'Patchday',
+      body: de ? `${name} wird in ${seconds} Sekunden geschlossen, um das Update zu installieren. Speichere deine Arbeit. Danach startet es wieder.`
+        : `${name} closes in ${seconds} seconds to install its update. Save your work. It starts again afterwards.`,
+    }).show(),
+  }, report);
   await saveFile(data('reports', `${report.startedAt.replace(/[:.]/g, '-')}.json`), JSON.stringify(updated, null, 2));
   await writeRunLog(updated).catch(() => {});
+  const fixed = updated.items.filter((item, index) => item.outcome === 'applied' && report.items[index].outcome !== 'applied');
+  if (fixed.length) await recordHistory(fixed.map((item) => ({ at: new Date().toISOString(), action: 'update' as const, manager: item.source, id: item.id ?? item.name, name: item.name, ok: true, detail: item.reason })));
   return updated;
 }
 
@@ -294,19 +300,20 @@ function registerIpc(): void {
     if (mode === 'apply' && hub.queue.active) throw new Error('Package operations are still running; wait until the queue is empty');
     busy = true;
     try {
-      const onItems = (items: ProgressItem[]) => sender.send('progress', items);
+      let lastItems: ProgressItem[] = [];
+      const onItems = (items: ProgressItem[]) => { lastItems = items; sender.send('progress', items); };
       const onLog = (message: string) => sender.send('log', message);
       // "Update now" touches containers only, which need no admin rights, so it runs here on every system.
       if (options.only) return await execute(mode, onLog, onItems, options);
       // Windows: real updates go through the task that already holds admin rights.
       if (mode === 'apply' && (await workerReady(exec))) {
-        const main = await retryUserScope(await runWorker(exec, data('progress.json'), onItems));
+        const main = await followUp(await runWorker(exec, data('progress.json'), onItems), true, lastItems, onItems);
         // The worker only runs what is automatic; waiting containers the user chose follow here.
         if (!options.force?.length) return main;
         const extra = await execute(mode, onLog, onItems, { only: options.force });
         return mergeForced(main, extra, new Set(options.force));
       }
-      return await execute(mode, onLog, onItems, options);
+      return await followUp(await execute(mode, onLog, onItems, options), true, lastItems, onItems);
     } finally {
       busy = false;
       hub.queue.pump();
@@ -496,8 +503,8 @@ async function runScheduled(): Promise<void> {
   const settings = await loadSettings();
   const elevated = settings.applyUpdates && (await workerReady(exec));
   const report = elevated
-    ? await retryUserScope(await runWorker(exec, data('progress.json'), () => {}))
-    : await execute(settings.applyUpdates ? 'apply' : 'preview', () => {});
+    ? await followUp(await runWorker(exec, data('progress.json'), () => {}), false)
+    : await followUp(await execute(settings.applyUpdates ? 'apply' : 'preview', () => {}), false);
   const changed = report.items.filter((item) => item.outcome === 'applied').length;
   const open = report.items.filter((item) => item.outcome !== 'applied').length;
   new Notification({ title: 'Patchday', body: `${changed} applied, ${open} need a look` }).show();

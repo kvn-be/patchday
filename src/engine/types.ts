@@ -30,7 +30,7 @@ export interface Report {
 }
 
 export type ProgressState = 'queued' | 'running' | 'done' | 'failed';
-export type Phase = 'backup' | 'update' | 'test' | 'rollback' | 'retry' | 'reinstall';
+export type Phase = 'backup' | 'update' | 'test' | 'rollback' | 'retry' | 'reinstall' | 'close' | 'installer' | 'open';
 
 export interface ProgressItem {
   id: string;

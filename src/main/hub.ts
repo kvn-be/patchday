@@ -15,6 +15,8 @@ import { exec } from '../engine/exec.ts';
 import { changeSource, details, listSources } from '../engine/hub.ts';
 import { listInstalled, managerStatus, operate, type Inventory, type PackageDeps } from '../engine/packages.ts';
 import { OperationQueue, type Operation } from '../engine/queue.ts';
+import { createAppFinder, startApp } from '../engine/rescue.ts';
+import { BREW_ENV } from '../engine/run.ts';
 import type { HistoryEntry } from '../core/history.ts';
 import type { Settings } from '../engine/types.ts';
 
@@ -450,6 +452,18 @@ export function createHub(env: HubEnv) {
         }
       }));
       return result;
+    });
+    // The name in the lists starts the program behind a package, when there is one.
+    let finder: { at: number; find: ReturnType<typeof createAppFinder> } | null = null;
+    ipcMain.handle('open-app', async (_event, input: unknown) => {
+      const [entry] = cleanPackages([input]);
+      if (!entry) return 'none';
+      if (!finder || Date.now() - finder.at > 5 * 60_000) finder = { at: Date.now(), find: createAppFinder(exec, process.platform, BREW_ENV) };
+      const found = await finder.find(entry).catch(() => null);
+      if (!found) return 'none';
+      const ok = await startApp(exec, found).catch(() => false);
+      env.appendLog(`start app ${entry.manager} ${entry.id}: ${ok ? 'started' : 'failed'}`);
+      return ok ? 'started' : 'failed';
     });
     ipcMain.handle('open-url', (_event, url: unknown) => {
       const safe = asSafeUrl(typeof url === 'string' ? url : '');

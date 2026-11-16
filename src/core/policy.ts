@@ -29,6 +29,8 @@ export const DEFAULT_POLICY: PolicyOptions = { autoMinor: false, holds: [] };
 
 // Reasons the engine and the app look for: a minor update that is neither a security fix nor approved.
 export const OPTIONAL_MINOR = 'optional minor update';
+// A database cannot read the data of an older major version; that needs a dump and restore, never a new image.
+export const DATABASE_MAJOR = 'major database update: needs a dump and restore';
 export const MINOR_WITHOUT_NOTES = 'minor update without release notes';
 
 const PROTECTED: Array<[RegExp, string]> = [
@@ -80,6 +82,7 @@ export function decide(candidate: UpdateCandidate, options: PolicyOptions = DEFA
   if (options.holds.some((hold) => image.includes(hold))) return { action: 'propose', reason: 'on hold list' };
 
   const category = protectedCategory(image);
+  if (category === 'database' && bump === 'major') return { action: 'propose', reason: DATABASE_MAJOR };
   if (category) {
     const fix = bump === 'patch' || (bump === 'minor' && POSTGRES.test(image) && (parseTag(currentTag)?.numbers.length ?? 0) === 2);
     if (!BUGFIX_OK.has(category) || !fix) return { action: 'propose', reason: `protected: ${category}` };

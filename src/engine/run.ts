@@ -3,7 +3,7 @@ import { bumpImage } from '../core/compose.ts';
 import { parseInspect, type ContainerInfo } from '../core/docker.ts';
 import { parseChocoOutdated, type ChocoPackage } from '../core/choco.ts';
 import { diagnoseBrew, diagnoseChoco, diagnoseScoop, diagnoseWinget, type Diagnosis } from '../core/failures.ts';
-import { decide, MINOR_WITHOUT_NOTES, OPTIONAL_MINOR, protectedCategory, type Decision } from '../core/policy.ts';
+import { DATABASE_MAJOR, decide, MINOR_WITHOUT_NOTES, OPTIONAL_MINOR, protectedCategory, type Decision } from '../core/policy.ts';
 import { isPrerelease, latestTag } from '../core/version.ts';
 import { parseWingetUpgrade, type WingetPackage } from '../core/winget.ts';
 import { EXTRA_MANAGERS, isExtra, isSkipped, managersFor, packageKey, parseScoopStatus, repairPlan, scoopCommand, WINGET_FLAGS, wingetTarget, type Package } from '../core/packages.ts';
@@ -46,7 +46,7 @@ interface ImagePlan {
 }
 
 // Reasons the user can overrule with "Update now". The others mean Patchday cannot do the update itself.
-const CANNOT_OVERRULE = new Set(['tag schemes differ', 'not managed by Compose or Portainer', 'already up to date']);
+const CANNOT_OVERRULE = new Set(['tag schemes differ', 'not managed by Compose or Portainer', 'already up to date', DATABASE_MAJOR]);
 const TOGETHER = 'services that must be updated together';
 export const BY_YOU = 'updated by you';
 // Waiting reasons "Update now" cannot fix: Patchday has no way to deploy these.

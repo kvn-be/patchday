@@ -130,3 +130,10 @@ test('old YAML and XML bundles are read', () => {
   assert.throws(() => xmlToJson('<!DOCTYPE x [<!ENTITY a SYSTEM "file:///etc/passwd">]><x>&a;</x>'), /DOCTYPE/);
   assert.throws(() => parseBundle('not json', 'ubundle', 'win32'), /not a package bundle/);
 });
+
+test('a database major update is never offered, not even with "Update now"', async () => {
+  const { decide, DATABASE_MAJOR } = await import('./policy.ts');
+  const candidate = { image: 'postgres', currentTag: '16.15-alpine3.23', candidateTag: '18.7-alpine3.23', healthy: true, managed: true };
+  assert.deepEqual(decide(candidate), { action: 'propose', reason: DATABASE_MAJOR });
+  assert.equal(decide({ ...candidate, candidateTag: '16.16-alpine3.23' }).action, 'auto');
+});

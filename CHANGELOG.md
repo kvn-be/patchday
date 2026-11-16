@@ -2,6 +2,17 @@
 
 All notable changes to Patchday are listed here. Versions follow [semantic versioning](https://semver.org). Every release so far is a preview.
 
+## 2.0.1 - 2026-11-16
+
+### Fixed
+
+- **Update all** stopped with `Nothing to update` when no waiting containers were chosen.
+- A major update of a database image (for example PostgreSQL 16 to 18) is no longer offered, not even with **Update now** or **Update all, including waiting**. A new image cannot read the old data; that needs a dump and restore.
+
+### Changed
+
+- All progress is in **Queue**: the update run shows its steps at the top, including a note while containers are tested for up to 5 minutes. Package operations that wait for the run say so. **Updates** shows only the report and a link to the progress; **Update all** and **Update now** open **Queue**.
+
 ## 2.0.0 - 2026-11-16
 
 ### Added
